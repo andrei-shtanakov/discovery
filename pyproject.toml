@@ -1,7 +1,7 @@
 [project]
 name = "discovery"
 version = "0.1.0"
-description = "Add your description here"
+description = "Runtime scaffold for discovery interviews and brief authoring"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
