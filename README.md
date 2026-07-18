@@ -11,7 +11,7 @@ implementation has not yet been wired. The boundary remains authoring-only:
 `discovery` should produce a brief for review/PR and must not generate or run
 downstream `tasks.md`, design, or execution plans.
 
-Canonical upstream inputs:
+Canonical upstream inputs (expected as sibling directories in the same workspace):
 
 - `../discovery-toolkit/DISCOVERY-BRIEF-CONTRACT.md`
 - `../discovery-toolkit/.claude/skills/discovery-interview/`
