@@ -50,7 +50,7 @@
 
 ## Решение о старте (блокирует всё остальное)
 
-- [ ] Решить: наполнять runtime или явно припарковать репо до триггера @owner:github:andrei-shtanakov @trigger:"понадобились состояние / мультиюзер / веб-UI, которых skill-режим не даёт"
+- [ ] Решить: наполнять runtime или явно припарковать репо до триггера @owner:github:andrei-shtanakov @trigger:"понадобились состояние / мультиюзер / веб-UI, которых skill-режим не даёт" @id:start-decision
       ADR (раздел «Где живёт», вариант B) выделяет репо **только** когда контракт
       стабилен **и** нужны состояние/мультиюзер/UI. Первое условие выполнено с
       2026-07-14, второе — нет: оба реальных интервью прошли skill'ом в cowork-сессии,
@@ -61,27 +61,27 @@
 
 ## Наполнение runtime (все пункты — после решения выше)
 
-- [ ] Вендорить пиненую копию `DISCOVERY-BRIEF-CONTRACT.md` внутрь репо @owner:github:andrei-shtanakov @blocked_by:discovery#start-decision
+- [ ] Вендорить пиненую копию `DISCOVERY-BRIEF-CONTRACT.md` внутрь репо @owner:github:andrei-shtanakov @blocked_by:todo://discovery/start-decision @id:vendored-contract
       Shipped-код не резолвит ни `../_cowork_output/`, ни `../discovery-toolkit/`
       (правило `repo-boundaries`). Сейчас README перечисляет соседние пути как
       canonical upstream inputs — для доки это нормально, для рантайма нет.
       Вендоринг тут не «один из вариантов», а единственный: `discovery-toolkit`
       помечен `package = false`, то есть зависимостью его не подключить.
-- [ ] Тест синхронизации вендоренной копии с каноном @owner:github:andrei-shtanakov @blocked_by:discovery#vendored-contract
+- [ ] Тест синхронизации вендоренной копии с каноном @owner:github:andrei-shtanakov @blocked_by:todo://discovery/vendored-contract @id:vendored-contract-sync
       Образец готов у соседа — `discovery-toolkit/tests/test_contract_sync.py`.
       Без него пиненая копия тихо разъедется с каноном, и это увидит только человек.
-- [ ] Решить судьбу `gate_check.py`: вендорить линтер или переопубликовать как общий пакет @owner:github:andrei-shtanakov @blocked_by:discovery#start-decision
+- [ ] Решить судьбу `gate_check.py`: вендорить линтер или переопубликовать как общий пакет @owner:github:andrei-shtanakov @blocked_by:todo://discovery/start-decision @id:gate-check-strategy
       Копия даст третью реализацию правил GC-01…GC-16 (первая — toolkit, вторая —
       governance-линтер), и они разъедутся. Это решение, а не механика.
-- [ ] Границу author ≠ execute закрепить тестом, а не только доками @owner:github:andrei-shtanakov @blocked_by:discovery#start-decision
+- [ ] Границу author ≠ execute закрепить тестом, а не только доками @owner:github:andrei-shtanakov @blocked_by:todo://discovery/start-decision @id:author-execute-boundary
       ADR TL;DR 2 и README запрещают писать `tasks.md`/design/execution-планы. Пока
       это утверждение в прозе; у соседа-аналога (dispatcher) такие инварианты
       проверяются кодом.
 - [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью"
-- [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @blocked_by:discovery#start-decision
+- [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @blocked_by:todo://discovery/start-decision @id:l3-quality-benchmark
       План §3: прогон живёт в нетрекаемом стенде `discovery-test`, фикстуры L0/L1 — в
       тестах репо. Раньше runtime мерить нечего.
-- [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:discovery#start-decision
+- [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/start-decision @id:phase-3-grounding
       Это же место пересечения с Robin — см. раздел ниже.
 - [ ] Политика приватности `interview.sessions`: хранить роли, не имена @owner:github:andrei-shtanakov @trigger:"первое интервью с сотрудником, а не с заказчиком"
       ADR «Последствия» §5: провенанс «кто что сказал» при опросе сотрудников
@@ -94,7 +94,7 @@
       набора, discovery среди них нет. На пустом каркасе гейт нечего защищать, но включать его надо тем же PR,
       что приносит первый код, — иначе первая же реализация въезжает без проверки
       границ и путей.
-- [ ] Handoff: зарегистрировать discovery в `workspace-manifest.toml` (SSOT набора) @owner:github:andrei-shtanakov @blocked_by:discovery#start-decision
+- [ ] Handoff: зарегистрировать discovery в `workspace-manifest.toml` (SSOT набора) @owner:github:andrei-shtanakov @blocked_by:todo://discovery/start-decision @id:workspace-manifest-registration
       В манифесте `ai-orchestrators-workspace` сейчас 3 ядра + 11 apps + 2 tools, и
       ни discovery, ни discovery-toolkit в них нет. Правка — в чужом репо, поэтому
       наша часть ровно одна: написать handoff, когда репо перестанет быть каркасом.
