@@ -77,19 +77,19 @@
       ADR TL;DR 2 и README запрещают писать `tasks.md`/design/execution-планы. Пока
       это утверждение в прозе; у соседа-аналога (dispatcher) такие инварианты
       проверяются кодом.
-- [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью"
+- [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests
 - [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @blocked_by:todo://discovery/start-decision @id:l3-quality-benchmark
       План §3: прогон живёт в нетрекаемом стенде `discovery-test`, фикстуры L0/L1 — в
       тестах репо. Раньше runtime мерить нечего.
 - [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/start-decision @id:phase-3-grounding
       Это же место пересечения с Robin — см. раздел ниже.
-- [ ] Политика приватности `interview.sessions`: хранить роли, не имена @owner:github:andrei-shtanakov @trigger:"первое интервью с сотрудником, а не с заказчиком"
+- [ ] Политика приватности `interview.sessions`: хранить роли, не имена @owner:github:andrei-shtanakov @trigger:"первое интервью с сотрудником, а не с заказчиком" @id:employee-interview-privacy-policy
       ADR «Последствия» §5: провенанс «кто что сказал» при опросе сотрудников
       чувствителен, и решать это надо до пилота, а не после.
 
 ## Инфраструктура репо
 
-- [ ] Подключить governance-гейт ADR-ECO-004 (caller `governance / gate`) @owner:github:andrei-shtanakov @trigger:"в репо появился код или CI"
+- [ ] Подключить governance-гейт ADR-ECO-004 (caller `governance / gate`) @owner:github:andrei-shtanakov @trigger:"в репо появился код или CI" @id:governance-gate-caller
       Замер 2026-07-26: тонкий caller зонтичного reusable-workflow есть у 14 репо
       набора, discovery среди них нет. На пустом каркасе гейт нечего защищать, но включать его надо тем же PR,
       что приносит первый код, — иначе первая же реализация въезжает без проверки
