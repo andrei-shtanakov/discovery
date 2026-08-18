@@ -92,9 +92,12 @@ A test that compares the copy against a stored checksum proves the copy's
 internal consistency, not its provenance — so copy-integrity resolves the
 upstream tree at the pinned commit. Upstream unreachable ⇒ `unknown`, never
 `pass`. The drift watch carries an explicit expiry: no successful run in the
-last **8 days** ⇒ `unknown` (a weekly schedule plus one missed slot, so a single
-skipped run is not yet an alarm and two are). Both checks are CI-side; the
-runtime performs neither and never reads the sibling directory.
+last **8 days** ⇒ `unknown`. On a weekly schedule that means **the first missed
+slot already turns the state unknown** — stated plainly rather than dressed up
+as tolerance, because the threshold is chosen fail-closed: a watch whose silence
+is indistinguishable from a clean result is the defect it exists to prevent.
+Both checks are CI-side; the runtime performs neither and never reads the
+sibling directory.
 
 **Joining questions to coverage keys.** A topic's coverage key cannot be derived
 from the ID prefix in its heading — not inconveniently, but by construction:
@@ -116,15 +119,26 @@ reproduces the class of defect where a green gate sits over an unread source.
 ## 5. State — the transcript is an event journal
 
 A session is an append-only JSONL journal plus a header (`frame`, target repo,
-`traces_to`, and for the engineer frame the upstream customer brief). It records
+`traces_to`, the upstream customer brief for the engineer frame, and the
+`question_source` pin — the vendored bank's upstream commit). It records
 **events, not answers only** — otherwise suspend/resume works for the file and
 not for the conversation:
 
 ```json
-{"event":"question_asked","question_id":"customer.goals.01","coverage_key":"goals","ts":"…"}
+{"event":"question_asked","question_id":"customer.goals.01","coverage_key":"goals","question_text":"…","source_pin":"…","ts":"…"}
 {"event":"answer_recorded","question_id":"customer.goals.01","answer_id":"sha256:…","participant_role":"product","text":"…","ts":"…"}
 {"event":"answer_superseded","question_id":"customer.goals.01","from":"sha256:…","to":"sha256:…","ts":"…"}
+{"event":"source_pin_changed","from":"…","to":"…","ts":"…"}
 ```
+
+**A session survives a bank update.** `question_asked` stores the question's
+actual text and the pin it came from, and `next_action` is reconstructed **from
+the journal**, never by re-resolving a stored id against the current bank.
+Without this, a re-pin between `start` and resume would silently change what a
+question id means — or drop it — and the answer already recorded against it
+would attach to a different question. A pin that differs from the header's at
+the next call is appended as `source_pin_changed`, so a brief assembled across
+two bank versions can say so instead of looking uniform.
 
 **Issuance is recorded before the command returns.** `start` / `status` persist
 `question_asked` and only then emit `next_action`. A crash in the other order
@@ -138,7 +152,13 @@ allowed — real interviews jump around, and the bank is a checklist, not a
 railway.
 
 **Idempotency and conflict.** `answer_id` is the SHA-256 of
-(`session_id`, `question_id`, normalised answer text). Replaying the same
+(`session_id`, `question_id`, `participant_role`, canonical answer bytes), the
+four fields NUL-separated so no concatenation can be read two ways. The
+canonical form is fixed rather than "normalised": UTF-8 bytes with `CRLF` and
+`CR` folded to `LF`, and **no** trimming or other transformation of the content.
+`participant_role` is part of the identity because the same words from a
+different role are a different fact — without it, an answer whose attribution
+changed would be swallowed as a no-op. Replaying the same
 `answer_id` — the ordinary case after a transport timeout — is a no-op that
 returns the same status. A *different* answer to a question that already has one
 is refused unless `--supersede` is passed; with it, both
@@ -197,26 +217,37 @@ it never anticipates it.
 
 ## 7. Status protocol — two axes, one priority order
 
+Every command returns the same envelope — including when it refuses:
+
 ```json
 {
   "lifecycle": "awaiting_input | complete | unknown",
   "gate":      "pass | fail | unknown",
   "next_action": {},
-  "findings": []
+  "findings": [],
+  "operation": {
+    "status": "ok | refused | unknown",
+    "reason": "no_target_question | answer_conflict"
+  }
 }
 ```
 
-Exit codes `0` / `10` / `20` are a projection of the two axes, with a strict
-priority; `1` and `2` are outcomes of the call itself and mean the axes were not
-evaluated:
+`operation` describes the call; `lifecycle` and `gate` describe the session. A
+refusal does not blank them: at exit `2` the state was readable and left
+unchanged, so the axes carry the current computed values and the caller learns
+both what it asked for and where the session stands. Only exit `1` may report
+`unknown` axes.
 
 | code | meaning | priority |
 |---|---|---|
-| `1` | state or tool unknown — nothing was decided | highest |
-| `2` | refused precondition: no target question, or a conflicting answer without `--supersede`; **state unchanged** | |
+| `1` | state or tool unknown — nothing was decided (`operation.status: unknown`) | highest |
+| `2` | refused precondition: no target question, or a conflicting answer without `--supersede`; state readable and **unchanged** | |
 | `20` | `lifecycle: awaiting_input` (§5) | |
 | `10` | `lifecycle: complete`, `gate: fail` | |
 | `0` | `lifecycle: complete`, `gate: pass` | lowest |
+
+Codes `0` / `10` / `20` project the two axes; `1` and `2` are outcomes of the
+call itself.
 
 The priority is load-bearing: an incomplete transcript almost always also yields
 linter findings, so without it the same transcript could return `20` on one call
@@ -264,10 +295,14 @@ counters and `gate_passed` per the contract's §4 formula; the two-pass GC-15
 rule; the exit-code table exercised across every outcome; the tri-state rule for
 unreadable state. The protocol invariants of §5 are tested as such: issuance is
 persisted before the command returns (kill between the two must not lose
-attribution); replaying an `answer_id` is a no-op; a conflicting answer without
-`--supersede` is refused with the state unchanged; with `--supersede` both
-events survive and render uses the latest; `complete` is reached exactly by the
-rule, including the case `complete` + `gate: fail`. `QuestionSource` is a fake
+attribution); replaying an `answer_id` is a no-op, while the same text under a
+different `participant_role` is a distinct answer, not a replay; a conflicting
+answer without `--supersede` is refused with the state unchanged **and** with
+the axes still populated; with `--supersede` both events survive and render uses
+the latest; `complete` is reached exactly by the rule, including the case
+`complete` + `gate: fail`. One test re-pins the vendored bank mid-session and
+asserts that resume still reproduces the issued questions from the journal —
+the failure mode it guards is an id silently changing meaning. `QuestionSource` is a fake
 throughout; no model participates at any level of this suite.
 
 **L2 — `transcript → brief`.** Assertions on properties of the brief, not on its
