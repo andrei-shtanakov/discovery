@@ -32,13 +32,14 @@ turn discovery into self-interrogation.
 
 Mode and authority for the implementation arc (ADR-ECO-007): mode
 `ecosystem-development`, `write_scope = {discovery}`. The target repository —
-where a brief eventually lands — enters `write_scope` only for runs that *use*
-the stage, never for this arc.
+where a brief eventually lands — is outside that scope; the one run that must
+write there, the live acceptance run, declares its own expanded scope
+beforehand and does not extend it to anything else (§12).
 
 ## 2. Scope
 
 **In:** session state that survives process exit; a status protocol a run can
-read; deterministic assembly of a `discovery-brief` from a transcript; the
+read; deterministic assembly of a `discovery-brief` from the session journal; the
 vendored contract and linter with their two guarantees; a CLI; the author ≠
 execute boundary enforced by tests.
 
@@ -70,14 +71,15 @@ two git mechanisms: what has to be built twice marks a boundary drawn wrong.
 surface it does not have. `CLAUDE.md` already requires the alternative: a
 pinned copy inside this repo.
 
-Vendored into `contract/`:
+Vendored into `contract/`, and the surface arrives in two instalments — A1 does
+not provide all of it:
 
-- `DISCOVERY-BRIEF-CONTRACT.md` — the canon of the output artifact.
-- `gate_check.py` — rules GC-01…GC-16, and `FRAMES`: the executable form of the
-  required coverage keys per frame (§4 of the contract).
-- `frames/customer.md`, `frames/engineer.md` — the question bank for
-  `QuestionSource.bank`.
-- `PINNED.txt` — upstream repo, commit, and the vendored paths.
+| artifact | what it carries | lands in |
+|---|---|---|
+| `DISCOVERY-BRIEF-CONTRACT.md` | the canon of the output artifact | A1 |
+| `gate_check.py` | rules GC-01…GC-16 and `FRAMES` — the executable form of the required coverage keys per frame (contract §4) | A1 |
+| `PINNED.txt` | upstream repo, commit, vendored paths | A1 |
+| `frames/customer.md`, `frames/engineer.md` | the question bank for `QuestionSource.bank` | A2, after `discovery-toolkit#4` |
 
 **Two guarantees, neither substituting for the other:**
 
@@ -89,9 +91,10 @@ Vendored into `contract/`:
 A test that compares the copy against a stored checksum proves the copy's
 internal consistency, not its provenance — so copy-integrity resolves the
 upstream tree at the pinned commit. Upstream unreachable ⇒ `unknown`, never
-`pass`; a missing or stale scheduled run is likewise `unknown`. Both are
-CI-side; the runtime performs neither check and never reads the sibling
-directory.
+`pass`. The drift watch carries an explicit expiry: no successful run in the
+last **8 days** ⇒ `unknown` (a weekly schedule plus one missed slot, so a single
+skipped run is not yet an alarm and two are). Both checks are CI-side; the
+runtime performs neither and never reads the sibling directory.
 
 **Joining questions to coverage keys.** A topic's coverage key cannot be derived
 from the ID prefix in its heading — not inconveniently, but by construction:
@@ -110,11 +113,51 @@ contains it. Violation is an error, not a warning — a bank incomplete relative
 to the coverage gate makes `gate_passed` unreachable, and silence about that
 reproduces the class of defect where a green gate sits over an unread source.
 
-## 5. State — the transcript is the source of truth
+## 5. State — the transcript is an event journal
 
-A session is an append-only JSONL transcript plus a header (`frame`, target
-repo, `traces_to`, and for the engineer frame the upstream customer brief). Each
-record: timestamp, `coverage_key`, `participant_role`, question id, answer text.
+A session is an append-only JSONL journal plus a header (`frame`, target repo,
+`traces_to`, and for the engineer frame the upstream customer brief). It records
+**events, not answers only** — otherwise suspend/resume works for the file and
+not for the conversation:
+
+```json
+{"event":"question_asked","question_id":"customer.goals.01","coverage_key":"goals","ts":"…"}
+{"event":"answer_recorded","question_id":"customer.goals.01","answer_id":"sha256:…","participant_role":"product","text":"…","ts":"…"}
+{"event":"answer_superseded","question_id":"customer.goals.01","from":"sha256:…","to":"sha256:…","ts":"…"}
+```
+
+**Issuance is recorded before the command returns.** `start` / `status` persist
+`question_asked` and only then emit `next_action`. A crash in the other order
+would let a re-run ask a different question, leaving the arriving answer
+unattributable.
+
+**Answers target a question, not a key.** `answer` takes `--question <id>`; with
+it omitted the target is `next_action.question_id`, and the command refuses if
+that is unset. Answering an open question that is not the current one is
+allowed — real interviews jump around, and the bank is a checklist, not a
+railway.
+
+**Idempotency and conflict.** `answer_id` is the SHA-256 of
+(`session_id`, `question_id`, normalised answer text). Replaying the same
+`answer_id` — the ordinary case after a transport timeout — is a no-op that
+returns the same status. A *different* answer to a question that already has one
+is refused unless `--supersede` is passed; with it, both
+`answer_superseded` and the new `answer_recorded` are appended, render uses the
+latest, and the journal keeps the history. Silent overwrite is the one behaviour
+excluded: it would make the transcript unable to explain its own brief.
+
+**Lifecycle is a function of the journal**, and it is about the conversation,
+never about the artifact:
+
+| state | rule |
+|---|---|
+| `awaiting_input` | some required topic of the frame still has an unissued question, **or** some issued question has no recorded answer |
+| `complete` | every required topic of the frame is exhausted **and** no issued question is unanswered |
+| `unknown` | the journal cannot be read or parsed |
+
+`complete` does **not** imply `gate: pass`. A conversation can end with thin
+answers that render empty sections and fail GC-05 — which is exactly why the two
+axes never collapse into one (§7).
 
 The brief is **derived**: re-rendered from the transcript, never edited in
 place. Three consequences pay for the choice — resume is a recomputation of
@@ -128,8 +171,10 @@ is the whole point and a lost final answer would be silent data loss:
 
 - appends take a file lock, write one complete JSONL line with `O_APPEND`, then
   `flush` + `fsync`;
-- the brief is written to a temporary file in the same directory and moved into
-  place with an atomic replace.
+- the brief is written to a temporary file in the same directory, moved into
+  place with `os.replace`, and the containing **directory** is fsynced
+  afterwards — without that the rename itself can be lost on power failure,
+  which is inside the durability we promise.
 
 "Append-only" alone guarantees neither: two processes or a crash mid-write can
 still corrupt the file.
@@ -161,19 +206,24 @@ it never anticipates it.
 }
 ```
 
-Exit codes are a projection of the two axes with a strict priority:
+Exit codes `0` / `10` / `20` are a projection of the two axes, with a strict
+priority; `1` and `2` are outcomes of the call itself and mean the axes were not
+evaluated:
 
 | code | meaning | priority |
 |---|---|---|
-| `1` | state or tool unknown | highest |
-| `20` | session valid, human input needed (`awaiting_input`) | |
-| `10` | input complete enough to judge, gate `fail` | |
-| `0` | gate `pass` | lowest |
+| `1` | state or tool unknown — nothing was decided | highest |
+| `2` | refused precondition: no target question, or a conflicting answer without `--supersede`; **state unchanged** | |
+| `20` | `lifecycle: awaiting_input` (§5) | |
+| `10` | `lifecycle: complete`, `gate: fail` | |
+| `0` | `lifecycle: complete`, `gate: pass` | lowest |
 
 The priority is load-bearing: an incomplete transcript almost always also yields
 linter findings, so without it the same transcript could return `20` on one call
 and `10` on the next. `findings` are returned even at `20` — otherwise a person
-cannot see that the brief is also defective, only that it is unfinished.
+cannot see that the brief is also defective, only that it is unfinished. `2` is
+kept distinct from `1` because a refusal is a known state, and folding it into
+"unknown" would make a retry look reasonable when it is not.
 
 `20` is the shape that makes the stage callable by a run: waiting is a state,
 not a failure and not a command. Unreadable state is `unknown` (`lifecycle`
@@ -185,7 +235,7 @@ CLI surface, four commands, all emitting the status above:
 ```
 start  --frame {customer,engineer} --target <repo> [--traces-to <path>...]
 status --session <id> [--json]
-answer --session <id> --key <coverage_key> --role <participant_role> --file <path>|-
+answer --session <id> [--question <id>] --role <participant_role> --file <path>|- [--supersede]
 brief  --session <id> --out <brief_path>
 ```
 
@@ -209,11 +259,16 @@ pinned commit; the fail-closed bank invariant (§4); and a negative test on the
 instrument itself: agreement with a locally stored checksum must not be accepted
 as evidence of provenance.
 
-**L1 — the deterministic core.** Frozen transcript → assertions on `coverage`,
+**L1 — the deterministic core.** Frozen journal → assertions on `coverage`,
 counters and `gate_passed` per the contract's §4 formula; the two-pass GC-15
-rule; the exit-code priority table exercised across all four outcomes; the
-tri-state rule for unreadable state. `QuestionSource` is a fake throughout; no
-model participates at any level of this suite.
+rule; the exit-code table exercised across every outcome; the tri-state rule for
+unreadable state. The protocol invariants of §5 are tested as such: issuance is
+persisted before the command returns (kill between the two must not lose
+attribution); replaying an `answer_id` is a no-op; a conflicting answer without
+`--supersede` is refused with the state unchanged; with `--supersede` both
+events survive and render uses the latest; `complete` is reached exactly by the
+rule, including the case `complete` + `gate: fail`. `QuestionSource` is a fake
+throughout; no model participates at any level of this suite.
 
 **L2 — `transcript → brief`.** Assertions on properties of the brief, not on its
 text. Synthetic transcripts to start; real frozen ones arrive from live runs and
@@ -231,13 +286,16 @@ append + fsync, §5).
 |---|---|---|
 | A1 | vendored contract + linter + `PINNED.txt` + both guarantees | — |
 | A2 | vendored bank + marker parsing + fail-closed invariant | A1, `discovery-toolkit#4` |
-| B | session (locked append-only JSONL, fsync) + render | A1 |
+| B | session journal (locked append-only JSONL, fsync) + render | A1 |
 | C | gate wrapper + status protocol + exit-code priority | A1 |
-| D | CLI + capability tests for the boundary | B, C, A2 |
+| D1 | CLI transport and state contract: commands, status JSON, capability boundary — against a fake `QuestionSource` | B, C |
+| D2 | `QuestionSource.bank`, the full interview flow, live acceptance | A2, D1 |
 
-B and C are the parallel pair, hence `max_concurrent: 2`. D depends on A2 as
-well: a CLI that cannot ask the next question is not the CLI, so blocking it
-whole is more honest than shipping half.
+B and C are the parallel pair, hence `max_concurrent: 2`. The D split keeps the
+external dependency off the critical path without pretending half a CLI is a
+deliverable: D1 fixes the transport and state contract and is fully testable
+with a fake source, D2 makes it usable. runtime-v1 is not accepted without D2
+and the live run (§12).
 
 Two items require neighbouring repos and therefore travel as handoffs, not as
 our edits: the bank markers (`discovery-toolkit#4`, filed) and registration in
@@ -249,6 +307,9 @@ our edits: the bank markers (`discovery-toolkit#4`, filed) and registration in
 references pointing only inside the file). `project.yaml` describes the DAG:
 
 ```yaml
+# workstreams are omitted here — they are generated from the implementation plan
+project: discovery-runtime-v1
+repo_url: https://github.com/andrei-shtanakov/discovery
 repo_path: ~/labs/all_ai_orchestrators/discovery
 workspace_base: ~/labs/all_ai_orchestrators/discovery-maestro-ws
 base_branch: pilot/runtime-v1      # integration branch; master is never touched
@@ -263,10 +324,16 @@ spec_runner:
   run_tests_on_done: true
   lint_command: "uv run ruff check . && uv run ruff format --check ."
   run_lint_on_done: true
-  extra_executor_config:           # fields SpecRunnerConfig does not mirror
-    execution_mode: tdd
-    tdd_runner: pytest
+  extra_executor_config:           # overlay onto the whole executor.config.yaml
+    executor:                      # …so non-mirrored fields must sit under `executor:`
+      execution_mode: tdd
+      tdd_runner: pytest
 ```
+
+`project` and `repo_url` are required by `OrchestratorConfig`. The overlay is
+deep-merged onto the document produced by `to_executor_config()`, which nests
+everything under an `executor` key — an overlay written at top level would
+create keys spec-runner never reads.
 
 **Blocking checks before the first agent** (all fail-closed): repository
 identity and baseline; `git config --local core.worktree` empty; `spec-runner
@@ -284,7 +351,17 @@ otherwise it escalates to the owner.
 
 Implementation green is not the finish line: without one live call the suite
 would cover the core but not the property the arc exists for — that a run can
-call the stage. The live evidence, in order:
+call the stage.
+
+**Precondition — a recorded authority expansion.** The implementation arc runs
+with `write_scope = {discovery}`, but the evidence run writes a brief into the
+target repository. That expansion is declared and recorded for the acceptance
+run specifically (`write_scope = {discovery, <target>}`), before it starts, and
+it does not carry over to any later run. An acceptance run that quietly wrote
+outside the arc's declared scope would violate the very rule this design cites
+as its authority model (ADR-ECO-007 D2).
+
+The live evidence, in order:
 
 1. `start` returns `awaiting_input`, exit `20`.
 2. The process exits; state survives.
