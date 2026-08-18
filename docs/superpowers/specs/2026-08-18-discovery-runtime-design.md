@@ -2,10 +2,13 @@
 
 Status: approved in discussion 2026-08-18 (owner: Andrei); this document is the
 written record. Implementation plan: `docs/plans/` (written next, from this
-document). Canon it consumes: `../discovery-toolkit/DISCOVERY-BRIEF-CONTRACT.md`
-v1.1 and `gate_check.py` (vendored, §4). Decision it descends from:
-`../_cowork_output/decisions/2026-07-13-adr-discovery-interview-agent.md`
-("Где живёт", option B).
+document). What the runtime reads: `contract/` inside this repository — the
+pinned copy of the brief contract v1.1 and `gate_check.py` (§4); no runtime path
+ever resolves outside this repo. Upstream of that copy, as provenance only:
+`discovery-toolkit`. Decision it descends from
+`_cowork_output/decisions/2026-07-13-adr-discovery-interview-agent.md` in the
+dev-only cowork workspace ("Где живёт", option B) — a document reference, not a
+path this repo resolves.
 
 ---
 
@@ -338,8 +341,14 @@ our edits: the bank markers (`discovery-toolkit#4`, filed) and registration in
 
 ## 11. The orchestrated run
 
-`spec/tasks.md` holds the canonical backlog (`TASK-NNN`, `Depends on:`
-references pointing only inside the file). `project.yaml` describes the DAG:
+`spec/tasks.md` in this repository holds the canonical backlog for **building
+the runtime** (`TASK-NNN`, `Depends on:` references pointing only inside the
+file), authored by us from the implementation plan. It is not in tension with
+the author ≠ execute boundary of §8: that boundary says the *runtime program*
+never writes `tasks.md` for a product it interviewed about. A repository
+carrying the backlog of its own construction is the ordinary fleet pattern
+(`kapelle/spec/tasks.md`), and nothing in the runtime reads or writes this file.
+`project.yaml` describes the DAG:
 
 ```yaml
 # workstreams are omitted here — they are generated from the implementation plan
