@@ -54,8 +54,8 @@ def parse_payload(raw: str) -> AnswerPayload:
     """Parse a YAML answer document into an `AnswerPayload`.
 
     Raises `PayloadInvalid` on a YAML syntax error, a non-mapping document,
-    a missing `text` key, an entry without an `id`, or an entry `id` not
-    matching `ID_RE`.
+    a missing `text` key, a non-list `entries` value, an entry without an
+    `id`, or an entry `id` not matching `ID_RE`.
     """
     try:
         doc = yaml.safe_load(raw)
@@ -64,5 +64,8 @@ def parse_payload(raw: str) -> AnswerPayload:
     if not isinstance(doc, dict) or "text" not in doc:
         raise PayloadInvalid(f"payload missing text: {doc!r}")
     text = str(doc["text"]).strip()
-    entries = [_parse_entry(item) for item in doc.get("entries", [])]
+    raw_entries = doc.get("entries") if doc.get("entries") is not None else []
+    if not isinstance(raw_entries, list):
+        raise PayloadInvalid(f"entries must be a list: {raw_entries!r}")
+    entries = [_parse_entry(item) for item in raw_entries]
     return AnswerPayload(text=text, entries=entries)

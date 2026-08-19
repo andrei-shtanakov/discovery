@@ -73,3 +73,14 @@ def test_entry_with_lowercase_id_is_invalid():
 def test_syntactically_broken_yaml_is_invalid():
     with pytest.raises(PayloadInvalid):
         parse_payload("text: [unclosed\n")
+
+
+def test_null_entries_is_treated_as_empty():
+    payload = parse_payload("text: hi\nentries:\n")
+
+    assert payload.entries == []
+
+
+def test_non_list_entries_is_invalid():
+    with pytest.raises(PayloadInvalid):
+        parse_payload("text: hi\nentries: 5\n")
