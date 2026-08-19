@@ -44,6 +44,7 @@ class Journal:
         """
         record = {**event, "ts": event.get("ts") or _now()}
         line = json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(self._path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX)
