@@ -69,13 +69,15 @@
 
 ## Наполнение runtime (решение принято; порядок — воркстримы A1/A2/B/C/D1/D2 в дизайне §10)
 
-- [ ] Вендорить пиненую копию `DISCOVERY-BRIEF-CONTRACT.md` внутрь репо @owner:github:andrei-shtanakov @id:vendored-contract
+- [x] Вендорить пиненую копию `DISCOVERY-BRIEF-CONTRACT.md` внутрь репо @owner:github:andrei-shtanakov @id:vendored-contract
+      **Сделано (PR #9).** Пред-вендоринг на базовую ветку: байты взяты `git show ee93092:<path>` из дерева коммита, а не из рабочей копии соседа — иначе провенанс не гарантирован.
       Shipped-код не резолвит ни `../_cowork_output/`, ни `../discovery-toolkit/`
       (правило `repo-boundaries`). Сейчас README перечисляет соседние пути как
       canonical upstream inputs — для доки это нормально, для рантайма нет.
       Вендоринг тут не «один из вариантов», а единственный: `discovery-toolkit`
       помечен `package = false`, то есть зависимостью его не подключить.
-- [ ] Тест синхронизации вендоренной копии с каноном @owner:github:andrei-shtanakov @blocked_by:todo://discovery/vendored-contract @id:vendored-contract-sync
+- [x] Тест синхронизации вендоренной копии с каноном @owner:github:andrei-shtanakov @blocked_by:todo://discovery/vendored-contract @id:vendored-contract-sync
+      **Сделано (PR #9).** `tools/check_vendor.py`: consistency против `PINNED.txt`, provenance против upstream-дерева на пине, недоступность ⇒ `unknown`; плюс `EXPECTED_SURFACE` — манифест сам предмет проверки.
       Образец готов у соседа — `discovery-toolkit/tests/test_contract_sync.py`.
       Без него пиненая копия тихо разъедется с каноном, и это увидит только человек.
 - [x] Решить судьбу `gate_check.py`: вендорить линтер или переопубликовать как общий пакет @owner:github:andrei-shtanakov @id:gate-check-strategy
@@ -87,7 +89,8 @@
       каноном ловят две раздельные гарантии (copy-integrity в PR-гейте против
       upstream-дерева на коммите из `PINNED.txt`; scheduled upstream-drift), недоступный
       upstream ⇒ `unknown`, не `pass`. Дизайн §4.
-- [ ] Вендорить банк вопросов (`frames/*.md`) + парс маркеров `coverage_key` + fail-closed инвариант полноты @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/bank-coverage-key-markers @id:vendored-bank
+- [ ] Вендорить банк вопросов (`frames/*.md`) + парс маркеров `coverage_key` + fail-closed инвариант полноты @owner:github:andrei-shtanakov @id:vendored-bank
+      **Разблокирован 2026-08-19**: `discovery-toolkit#4` закрыт как выполненный (маркеры в банке с `ee93092`, оба крайних случая учтены — `feasibility_review` как процесс и `coverage_key: none`). Блокер снят задним числом: он был снят ещё до нашего прогона, мы этого не заметили.
       Нужен `QuestionSource.bank`. Ключ темы не выводится из ID-префикса заголовка **по
       построению**: `X-NN`/`Q-NN` сквозные (их порождают и feasibility-проход, и тема
       «Завершение»), а `feasibility_review` — required-ключ с `None` в `FRAMES`
@@ -95,7 +98,8 @@
       `discovery-toolkit#4`. Эвристику по заголовку и вторую таблицу «тема → ключ» на
       своей стороне не заводим. Инвариант — «каждый required-ключ фрейма заявлен ≥1
       темой», error, не warning.
-- [ ] Границу author ≠ execute закрепить тестом, а не только доками @owner:github:andrei-shtanakov @blocked_by:todo://discovery/vendored-contract @id:author-execute-boundary
+- [x] Границу author ≠ execute закрепить тестом, а не только доками @owner:github:andrei-shtanakov @blocked_by:todo://discovery/vendored-contract @id:author-execute-boundary
+      **Сделано (PR #9).** `tests/test_boundary.py`: capability-тест — записи только под корень сессии и в переданный `brief_path`, в графе импортов ядра нет сети и запуска процессов. Не поиском строк.
       ADR TL;DR 2 и README запрещают писать `tasks.md`/design/execution-планы. Пока
       это утверждение в прозе; у соседа-аналога (dispatcher) такие инварианты
       проверяются кодом.
@@ -109,9 +113,17 @@
       ADR «Последствия» §5: провенанс «кто что сказал» при опросе сотрудников
       чувствителен, и решать это надо до пилота, а не после.
 
+## Ожидания ответов соседей
+
+- [ ] Ответ по `spec-runner#301`: генератор `plan --full` выдаёт мета-строку, которую отвергает валидатор `run`; отказ TDD-гейта невидим снаружи прогона @owner:github:andrei-shtanakov @blocked_by:spec-runner#301 @id:watch-spec-runner-301
+      Наш обход (требование к формату в описании воркстрима) работает, но это обход, а не починка.
+- [ ] Ответ по `maestro#198`: resume молча продолжает со старым scope из `state.db`, расхождение с `project.yaml` не сигналится @owner:github:andrei-shtanakov @blocked_by:maestro#198 @id:watch-maestro-198
+      Стоил двух прогонов: правка конфигурации выглядела применённой и не была.
+
 ## Инфраструктура репо
 
-- [ ] Подключить governance-гейт ADR-ECO-004 (caller `governance / gate`) @owner:github:andrei-shtanakov @trigger:"в репо появился код или CI" @id:governance-gate-caller
+- [x] Подключить governance-гейт ADR-ECO-004 (caller `governance / gate`) @owner:github:andrei-shtanakov @trigger:"в репо появился код или CI" @id:governance-gate-caller
+      **Сделано (PR #9).** Caller скопирован побайтово из флота (sha `a0243b1d`), по правилу единообразия.
       Замер 2026-07-26: тонкий caller зонтичного reusable-workflow есть у 14 репо
       набора, discovery среди них нет. На пустом каркасе гейт нечего защищать, но включать его надо тем же PR,
       что приносит первый код, — иначе первая же реализация въезжает без проверки

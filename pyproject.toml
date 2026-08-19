@@ -1,7 +1,48 @@
 [project]
 name = "discovery"
 version = "0.1.0"
-description = "Runtime scaffold for discovery interviews and brief authoring"
+description = "Runtime for discovery interviews and brief authoring"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["pyyaml>=6.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/discovery"]
+
+[tool.ruff]
+line-length = 88
+# Вендоренные байты: правка любого символа уничтожает то, что доказывает
+# copy-integrity. Нужен именно extend-exclude, а не lint.per-file-ignores:
+# per-file-ignores действует только на `ruff check`, а `ruff format` про него
+# не знает и переписал бы файл. Проверено боем 2026-08-19: red-чекпойнт
+# отказался замораживать тест, потому что `format --check` был красным на
+# вендоренном линтере.
+extend-exclude = ["src/discovery/contract/gate_check.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyrefly]
+# "basic" matches the unconfigured default this project ran under before
+# this file existed; without it, adding a config switches pyrefly to its
+# stricter default preset, which flags src/discovery/contract/gate_check.py
+# (vendored bytes we must not edit — see ruff's extend-exclude above).
+preset = "basic"
+# tools/ is not a package under src/discovery (NFR-004 boundary) — tests
+# reach it via sys.path.insert + plain `import check_vendor`, so pyrefly
+# needs it on the search path to resolve that import.
+search-path = ["src", "tools"]
+
+[dependency-groups]
+dev = [
+    "pyrefly>=1.2.0",
+    "pytest>=9.1.1",
+    "ruff>=0.16.3",
+]

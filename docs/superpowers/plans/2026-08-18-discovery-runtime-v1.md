@@ -87,42 +87,25 @@ another. `cli.py` composes and holds no rules of its own.
 - Consumes: nothing.
 - Produces: importable `discovery.contract.gate_check` exposing `check(text: str, base_dir: Path | None) -> list[Finding]`, `FRAMES: dict[str, dict]`, `Finding(rule: str, level: str, ref: str, message: str)`; `PINNED.txt` format used by Task 2's tooling.
 
-- [ ] **Step 1: Configure the package and dependencies**
+- [ ] **Step 1: Verify the baseline you were handed**
 
-```toml
-# pyproject.toml — replace the [project] block's tail and add the rest
-[project]
-name = "discovery"
-version = "0.1.0"
-description = "Runtime for discovery interviews and brief authoring"
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = ["pyyaml>=6.0"]
+`pyproject.toml`, the dev toolchain (`pytest`, `ruff`, `pyrefly`), `uv.lock`, the empty
+`tests/`, and the vendored `src/discovery/contract/` are **already on the base branch**.
+Do not re-create them: a TDD run cannot author a failing test in a repository whose test
+command does not run, so the environment is set up before the run starts, not inside it.
+(Attempt 4 died exactly here — `uv run pytest` could not spawn `pytest`; see
+`docs/evidence/2026-08-19-runtime-v1-implementation-run.md`.)
 
-[project.scripts]
-discovery = "discovery.cli:main"
+Confirm, and stop with a clear report if any of these is not true:
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+Run: `uv run pytest`
+Expected: exits cleanly, collecting nothing yet (no tests exist).
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/discovery"]
+Run: `uv run ruff check . && uv run ruff format --check .`
+Expected: `All checks passed!`
 
-[tool.ruff]
-line-length = 88
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
-
-[tool.ruff.lint.per-file-ignores]
-"src/discovery/contract/gate_check.py" = ["ALL"]  # vendored bytes, never edited
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-```
-
-Run: `uv add pyyaml && uv add --dev pytest ruff pyrefly`
+Run: `uv run python -c "from discovery.contract.gate_check import FRAMES; print(sorted(FRAMES))"`
+Expected: `['customer', 'engineer']`
 
 - [ ] **Step 2: Write the vendoring tool**
 
@@ -140,16 +123,27 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
-DEST = Path(__file__).resolve().parents[1] / "src" / "discovery" / "contract"
-CORE = ["DISCOVERY-BRIEF-CONTRACT.md", "gate_check.py"]
-FRAMES = [
-    ".claude/skills/discovery-interview/frames/customer.md",
-    ".claude/skills/discovery-interview/frames/engineer.md",
-]
+DEST = Path(
+    os.environ.get("VENDOR_DEST")
+    or Path(__file__).resolve().parents[1] / "src" / "discovery" / "contract"
+)
+# upstream path -> path inside the vendored copy. A mapping, not a shared prefix:
+# the toolkit keeps the bank deep inside its skill bundle, we keep it flat under
+# contract/frames/. Without the mapping Task 14 reads a path that does not exist
+# upstream — and a hermetic test faking the wrong shape stays green while doing it.
+CORE = {
+    "DISCOVERY-BRIEF-CONTRACT.md": "DISCOVERY-BRIEF-CONTRACT.md",
+    "gate_check.py": "gate_check.py",
+}
+FRAMES = {
+    ".claude/skills/discovery-interview/frames/customer.md": "frames/customer.md",
+    ".claude/skills/discovery-interview/frames/engineer.md": "frames/engineer.md",
+}
 
 
 def sha256(path: Path) -> str:
@@ -164,7 +158,9 @@ def main() -> int:
 
     commit = subprocess.run(
         ["git", "-C", str(args.upstream), "rev-parse", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
 
     wanted = list(CORE) + (FRAMES if args.include_frames else [])
@@ -188,16 +184,81 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 3: Vendor the two core files**
+- [ ] **Step 3: Make the package importable around the already-vendored copy**
 
-Run: `uv run tools/vendor_pull.py ../discovery-toolkit`
-Expected: `src/discovery/contract/` now holds `DISCOVERY-BRIEF-CONTRACT.md`, `gate_check.py`,
-`PINNED.txt`. Do not run with `--include-frames` yet — the bank lands in Task 11.
+`src/discovery/contract/` **already holds** `DISCOVERY-BRIEF-CONTRACT.md`, `gate_check.py`
+and `PINNED.txt`: they were vendored onto the base branch before the run, by hand, from the
+upstream tree at the pinned commit. Do not run `vendor_pull.py` against a sibling checkout
+here — **there is no upstream checkout inside a worktree**. `../discovery-toolkit` resolves
+next to the *worktree*, not next to the primary clone, and vendoring is a one-shot developer
+action that needs access no isolated task should have. (Learned the hard way: this step as
+originally written made TASK-001 unexecutable under maestro — see
+`docs/evidence/2026-08-19-runtime-v1-implementation-run.md`, attempt 3.)
+
+The same applies to the bank in Task 14: those files are pre-vendored too, when that task's
+upstream dependency lands.
 
 Create `src/discovery/__init__.py` and `src/discovery/contract/__init__.py`, both empty.
 The `__init__.py` sits *beside* the vendored file; the vendored file itself stays untouched.
 
-- [ ] **Step 4: Write the failing test**
+- [ ] **Step 4: Write the failing tests**
+
+The vendoring tool gets a **hermetic** test: a fake upstream built in `tmp_path`, never a
+sibling checkout. It is the only honest way to test it inside a worktree, and it pins the
+tool's contract (bytes copied verbatim, `PINNED.txt` lists commit and per-file digests)
+without depending on anything outside the test.
+
+```python
+# tests/test_vendor_pull.py
+import subprocess
+import sys
+from pathlib import Path
+
+TOOL = Path(__file__).resolve().parents[1] / "tools" / "vendor_pull.py"
+
+
+def make_fake_upstream(root: Path) -> str:
+    """A real git repo with the two vendored files, so HEAD is a real commit."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "DISCOVERY-BRIEF-CONTRACT.md").write_text(
+        "contract bytes\n", encoding="utf-8"
+    )
+    (root / "gate_check.py").write_text("FRAMES = {}\n", encoding="utf-8")
+
+    def run(*a: str) -> None:
+        subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True)
+
+    run("init", "-q")
+    run("config", "user.email", "t@example.com")
+    run("config", "user.name", "t")
+    run("add", ".")
+    run("commit", "-qm", "fixture")
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_pinned_txt_records_the_commit_and_digests(tmp_path, monkeypatch):
+    upstream = tmp_path / "upstream"
+    commit = make_fake_upstream(upstream)
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    monkeypatch.setenv("VENDOR_DEST", str(dest))
+    subprocess.run(
+        [sys.executable, str(TOOL), str(upstream)], check=True, capture_output=True
+    )
+    pinned = (dest / "PINNED.txt").read_text(encoding="utf-8")
+    assert f"commit: {commit}" in pinned
+    assert "DISCOVERY-BRIEF-CONTRACT.md " in pinned
+    assert (dest / "gate_check.py").read_text(encoding="utf-8") == "FRAMES = {}\n"
+```
+
+`vendor_pull.py` therefore reads its destination from `VENDOR_DEST` when set, defaulting to
+`src/discovery/contract` — a two-line change to the tool in Step 2, and the reason it exists:
+a tool that can only write one hardcoded path cannot be tested without touching the repo.
 
 ```python
 # tests/test_vendored_copy.py
@@ -232,7 +293,9 @@ def test_vendored_files_match_their_recorded_digests():
     _, manifest = parse_pinned()
     for rel, digest in manifest.items():
         blob = (CONTRACT / local_name(rel)).read_bytes()
-        assert hashlib.sha256(blob).hexdigest() == digest, f"{rel} drifted from PINNED.txt"
+        assert hashlib.sha256(blob).hexdigest() == digest, (
+            f"{rel} drifted from PINNED.txt"
+        )
 
 
 def test_the_linter_is_importable_and_exposes_the_frames_table():
@@ -245,15 +308,16 @@ def test_the_linter_is_importable_and_exposes_the_frames_table():
 
 - [ ] **Step 5: Run the tests**
 
-Run: `uv run pytest tests/test_vendored_copy.py -v`
-Expected: PASS (the vendoring in Step 3 already satisfies them). If
+Run: `uv run pytest tests/test_vendor_pull.py tests/test_vendored_copy.py -v`
+Expected: PASS (the copy vendored onto the base branch already satisfies the second file;
+the first is hermetic and needs nothing outside `tmp_path`). If
 `test_the_linter_is_importable...` fails on import, the package layout is wrong — check that
 `src/discovery/contract/__init__.py` exists and `uv run` resolves the project.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pyproject.toml src/discovery tools/vendor_pull.py tests/test_vendored_copy.py
+git add pyproject.toml src/discovery tools/vendor_pull.py tests/test_vendor_pull.py tests/test_vendored_copy.py
 git commit -m "feat(contract): vendor brief contract and gate_check at a pinned commit"
 ```
 
@@ -300,25 +364,20 @@ def test_provenance_unreachable_is_unknown_not_ok():
 
 
 def test_provenance_mismatch_fails():
-    verdict = check_vendor.verify("provenance", fetch=lambda commit, rel: b"not the file")
+    verdict = check_vendor.verify(
+        "provenance", fetch=lambda commit, rel: b"not the file"
+    )
     assert verdict.status == "failed"
 
 
-def test_drift_without_a_previous_success_is_unknown():
-    assert check_vendor.drift(last_success=None).status == "unknown"
+def test_drift_first_run_is_not_blocked_by_absent_history():
+    """The deadlock regression: run one must be able to pass."""
+    commit, _ = check_vendor.read_pinned()
+    assert check_vendor.drift(fetch=lambda *_: commit.encode()).status == "ok"
 
 
-def test_drift_with_a_stale_watch_is_unknown():
-    verdict = check_vendor.drift(
-        last_success="2026-08-01T06:17:00+00:00",
-        now="2026-08-18T06:17:00+00:00",
-    )
-    assert verdict.status == "unknown"
-    assert "stale" in verdict.detail
-
-
-def test_drift_with_an_unparseable_timestamp_is_unknown():
-    assert check_vendor.drift(last_success="last tuesday").status == "unknown"
+def test_drift_unreachable_upstream_is_unknown():
+    assert check_vendor.drift(fetch=lambda *_: None).status == "unknown"
 
 
 def test_provenance_matching_bytes_pass():
@@ -376,6 +435,13 @@ class Verdict:
     detail: str
 
 
+# What the vendored copy must contain. Without this, deleting a line from
+# PINNED.txt quietly drops that file from BOTH guarantees and leaves them green:
+# the manifest says WHAT gets checked, so the manifest is itself something to
+# check. Task 14 extends the set with the two frame files.
+EXPECTED_SURFACE = frozenset({"DISCOVERY-BRIEF-CONTRACT.md", "gate_check.py"})
+
+
 def read_pinned() -> tuple[str, dict[str, str]]:
     commit, manifest = "", {}
     for line in (CONTRACT / "PINNED.txt").read_text(encoding="utf-8").splitlines():
@@ -393,7 +459,9 @@ def local_path(rel: str) -> Path:
 
 def github_fetch(commit: str, rel: str) -> bytes | None:
     try:
-        with urllib.request.urlopen(API.format(rel=rel, commit=commit), timeout=20) as r:
+        with urllib.request.urlopen(
+            API.format(rel=rel, commit=commit), timeout=20
+        ) as r:
             return base64.b64decode(json.load(r)["content"])
     except (urllib.error.URLError, TimeoutError, KeyError, ValueError):
         return None
@@ -408,7 +476,9 @@ def verify(mode: str, fetch: Fetcher | None = None) -> Verdict:
             if hashlib.sha256(local_path(rel).read_bytes()).hexdigest() != digest
         ]
         if drifted:
-            return Verdict("failed", f"files differ from PINNED.txt: {', '.join(drifted)}")
+            return Verdict(
+                "failed", f"files differ from PINNED.txt: {', '.join(drifted)}"
+            )
         return Verdict("ok", f"{len(manifest)} files match their recorded digests")
 
     fetch = fetch or github_fetch
@@ -420,54 +490,38 @@ def verify(mode: str, fetch: Fetcher | None = None) -> Verdict:
         if blob != local_path(rel).read_bytes():
             mismatched.append(rel)
     if mismatched:
-        return Verdict("failed", f"differ from upstream@{commit[:8]}: {', '.join(mismatched)}")
+        return Verdict(
+            "failed", f"differ from upstream@{commit[:8]}: {', '.join(mismatched)}"
+        )
     return Verdict("ok", f"bytes identical to upstream@{commit[:8]}")
 
 
-def drift(last_success: str | None, max_age_days: int = 8, now: str | None = None) -> Verdict:
-    """Has upstream moved past the pin — and is the watch itself still alive?
+def drift(fetch: Fetcher | None = None) -> Verdict:
+    """Has upstream moved past the pin?
 
-    `last_success` is the ISO timestamp of the previous successful run of this
-    watch, passed in by the workflow. Absent or older than `max_age_days` is
-    `unknown`: a watch whose silence cannot be distinguished from a clean result
-    is the defect it exists to prevent.
+    Deliberately does NOT gate on when this watch last succeeded. Proving the
+    watch's own freshness from inside the watch deadlocks: run one has no
+    previous success, so it reports unknown, so the job fails, so a previous
+    success never appears. That the run happened at all proves the schedule
+    fired; a schedule that stops firing is caught from outside, by the fleet's
+    scheduled-run sensor.
     """
-    if last_success is None:
-        return Verdict("unknown", "freshness unverifiable: no previous successful run reported")
-    moment = dt.datetime.fromisoformat(now) if now else dt.datetime.now(dt.UTC)
-    try:
-        age = moment - dt.datetime.fromisoformat(last_success)
-    except (ValueError, TypeError):
-        # TypeError catches a naive timestamp subtracted from an aware one —
-        # a silently wrong age is worse than an honest unknown.
-        return Verdict("unknown", f"unusable last_success: {last_success!r}")
-    if age > dt.timedelta(days=max_age_days):
-        return Verdict("unknown", f"watch stale: last success {age.days}d ago (limit {max_age_days}d)")
-
     commit, _ = read_pinned()
-    try:
-        head = subprocess.run(
-            ["git", "ls-remote", "git@github.com:andrei-shtanakov/discovery-toolkit.git", "HEAD"],
-            capture_output=True, text=True, timeout=30, check=True,
-        ).stdout.split()[0]
-    except (subprocess.SubprocessError, IndexError):
-        return Verdict("unknown", "upstream HEAD unreadable")
-    if head != commit:
-        return Verdict("failed", f"pin {commit[:8]} is behind upstream {head[:8]}")
-    return Verdict("ok", f"pin matches upstream HEAD {head[:8]}")
+    fetch = fetch or github_fetch
+    head = fetch("HEAD", "HEAD")
+    if head is None:
+        return Verdict("unknown", "upstream HEAD unreachable")
+    head_sha = head.decode("utf-8").strip()
+    if head_sha == commit:
+        return Verdict("ok", f"pin matches upstream HEAD {head_sha[:8]}")
+    return Verdict("failed", f"pin {commit[:8]} is behind upstream {head_sha[:8]}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["consistency", "provenance", "drift"])
-    ap.add_argument(
-        "--last-success",
-        help="ISO timestamp of this watch's previous successful run (drift mode)",
-    )
     args = ap.parse_args()
-    verdict = (
-        drift(args.last_success) if args.mode == "drift" else verify(args.mode)
-    )
+    verdict = drift() if args.mode == "drift" else verify(args.mode)
     print(f"{args.mode}: {verdict.status} — {verdict.detail}")
     return {"ok": 0, "failed": 1, "unknown": 3}[verdict.status]
 
@@ -509,25 +563,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
-      - name: Run the watch against its own previous success
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ts=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/vendor-drift.yml/runs?status=success&per_page=1" \
-            --jq '.workflow_runs[0].created_at // empty' || true)
-          if [ -n "$ts" ]; then
-            uv run tools/check_vendor.py drift --last-success "$ts"
-          else
-            uv run tools/check_vendor.py drift   # no prior success → unknown, by design
-          fi
+      - run: uv run tools/check_vendor.py drift
 ```
 
 An unknown verdict exits 3, so the job goes red. That is the point: silence and cleanliness
-must not look the same. The freshness threshold is evaluated against the watch's **own**
-previous successful run, so a schedule that stops firing is caught by the next run that does
-fire — and a watch that never fires again is caught by the fleet's scheduled-run sensor, which
-reads workflow state from outside this repository.
+must not look the same. The watch's own liveness is deliberately not its own concern:
+gating on "when did I last succeed" deadlocks run one forever. A schedule that stops firing
+is caught from outside, by the fleet's scheduled-run sensor.
 
 - [ ] **Step 6: Commit**
 
@@ -604,7 +646,9 @@ def canonical_answer_bytes(text: str) -> bytes:
     return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
 
 
-def answer_id(session_id: str, question_id: str, participant_role: str, text: str) -> str:
+def answer_id(
+    session_id: str, question_id: str, participant_role: str, text: str
+) -> str:
     """Identity of an answer: session, question, role, canonical bytes — NUL-separated."""
     digest = hashlib.sha256(
         _SEP.join(
@@ -987,10 +1031,7 @@ from discovery.payload import PayloadInvalid, parse_payload
 
 def test_text_and_entries_are_both_kept():
     payload = parse_payload(
-        "text: we lose orders\n"
-        "entries:\n"
-        "  - id: G-01\n"
-        "    body: cut order loss\n"
+        "text: we lose orders\nentries:\n  - id: G-01\n    body: cut order loss\n"
     )
     assert payload.text == "we lose orders"
     assert payload.entries[0].eid == "G-01"
@@ -1379,9 +1420,7 @@ def next_question(
     return None
 
 
-def compute_lifecycle(
-    events: list[dict], source: QuestionSource, frame: str
-) -> str:
+def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) -> str:
     return AWAITING_INPUT if next_question(events, source, frame) else COMPLETE
 ```
 
@@ -1459,7 +1498,11 @@ def frontmatter(text: str) -> dict:
 
 
 def test_frontmatter_carries_the_contract_core():
-    doc = frontmatter(render_brief(HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"))
+    doc = frontmatter(
+        render_brief(
+            HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"
+        )
+    )
     assert doc["schema"] == "discovery-brief"
     assert doc["schema_version"] == 1
     assert doc["spec_stage"] == "discovery"
@@ -1473,7 +1516,9 @@ def test_validation_is_written_as_given_not_predicted():
 
 
 def test_entries_reach_the_body_with_their_fields():
-    text = render_brief(HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending")
+    text = render_brief(
+        HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"
+    )
     assert "- **FR-01** retry a timed-out call" in text
     assert "Priority: Must" in text
     assert "Acceptance: retried twice" in text
@@ -1481,21 +1526,35 @@ def test_entries_reach_the_body_with_their_fields():
 
 
 def test_coverage_reports_missing_for_keys_without_entries():
-    doc = frontmatter(render_brief(HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"))
+    doc = frontmatter(
+        render_brief(
+            HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"
+        )
+    )
     assert doc["coverage"]["goals"] == "covered"
     assert doc["coverage"]["personas"] == "missing"
 
 
 def test_superseded_answers_do_not_reach_the_body():
-    old = answer("customer.goals.01", "product", "text: old\nentries:\n  - id: G-01\n    body: stale goal\n")
-    new = answer("customer.goals.01", "product", "text: new\nentries:\n  - id: G-01\n    body: current goal\n")
+    old = answer(
+        "customer.goals.01",
+        "product",
+        "text: old\nentries:\n  - id: G-01\n    body: stale goal\n",
+    )
+    new = answer(
+        "customer.goals.01",
+        "product",
+        "text: new\nentries:\n  - id: G-01\n    body: current goal\n",
+    )
     text = render_brief(HEADER, [old, new], "pending")
     assert "current goal" in text and "stale goal" not in text
 
 
 def test_render_is_a_pure_function_of_its_inputs():
     events = [answer("customer.goals.01", "product", PAYLOAD)]
-    assert render_brief(HEADER, events, "pending") == render_brief(HEADER, events, "pending")
+    assert render_brief(HEADER, events, "pending") == render_brief(
+        HEADER, events, "pending"
+    )
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1524,10 +1583,20 @@ from discovery.payload import Entry, parse_payload
 from discovery.session import SessionHeader
 
 SECTION_TITLES = {
-    "G": "Goals", "P": "Personas", "J": "Jobs", "FR": "Functional requirements",
-    "NFR": "Non-functional requirements", "CON": "Constraints", "M": "Success metrics",
-    "OUT": "Out of scope", "RK": "Risks", "S": "Systems", "IF": "Interfaces",
-    "AP": "Architecture preferences", "Q": "Open questions", "X": "Conflicts",
+    "G": "Goals",
+    "P": "Personas",
+    "J": "Jobs",
+    "FR": "Functional requirements",
+    "NFR": "Non-functional requirements",
+    "CON": "Constraints",
+    "M": "Success metrics",
+    "OUT": "Out of scope",
+    "RK": "Risks",
+    "S": "Systems",
+    "IF": "Interfaces",
+    "AP": "Architecture preferences",
+    "Q": "Open questions",
+    "X": "Conflicts",
 }
 
 
@@ -1586,9 +1655,7 @@ def render_brief(
     }
     coverage = _coverage(header.frame, entries)
     required = FRAMES[header.frame]["required"]
-    traced = {
-        e.fields.get("traces", "") for e in entries if _prefix(e.eid) == "FR"
-    }
+    traced = {e.fields.get("traces", "") for e in entries if _prefix(e.eid) == "FR"}
     known = {e.eid for e in entries}
     gate_passed = (
         all(coverage[key] == "covered" for key, prefix in required.items() if prefix)
@@ -1628,7 +1695,11 @@ def render_brief(
                 body.append(f"  - {key}: {value}")
 
     front = yaml.safe_dump(meta, sort_keys=True, allow_unicode=True).rstrip()
-    return f"---\n{front}\n---\n\n# Discovery brief — {header.target}\n" + "\n".join(body) + "\n"
+    return (
+        f"---\n{front}\n---\n\n# Discovery brief — {header.target}\n"
+        + "\n".join(body)
+        + "\n"
+    )
 ```
 
 - [ ] **Step 4: Run to verify it passes**
@@ -1666,15 +1737,22 @@ from discovery.journal import ANSWER_RECORDED
 from discovery.session import SessionHeader
 
 HEADER = SessionHeader(
-    session_id="s-001", frame="customer", target="t", traces_to=[],
-    source_pin="pin-1", created_at="2026-08-18T10:00:00Z",
+    session_id="s-001",
+    frame="customer",
+    target="t",
+    traces_to=[],
+    source_pin="pin-1",
+    created_at="2026-08-18T10:00:00Z",
 )
 
 
 def answer(payload: str, qid: str = "customer.goals.01") -> dict:
     return {
-        "event": ANSWER_RECORDED, "question_id": qid, "answer_id": "sha256:x",
-        "participant_role": "product", "payload": payload,
+        "event": ANSWER_RECORDED,
+        "question_id": qid,
+        "answer_id": "sha256:x",
+        "participant_role": "product",
+        "payload": payload,
     }
 
 
@@ -1871,7 +1949,9 @@ def ok(
     next_action: dict | None = None,
     findings: list[str] | None = None,
 ) -> Envelope:
-    return Envelope(lifecycle, gate, next_action or {}, findings or [], {"status": "ok"})
+    return Envelope(
+        lifecycle, gate, next_action or {}, findings or [], {"status": "ok"}
+    )
 
 
 def refused(
@@ -1949,12 +2029,7 @@ CATALOGUE = {
     ]
 }
 
-PAYLOAD = (
-    "text: we lose orders\n"
-    "entries:\n"
-    "  - id: G-01\n"
-    "    body: cut order loss\n"
-)
+PAYLOAD = "text: we lose orders\nentries:\n  - id: G-01\n    body: cut order loss\n"
 
 
 @pytest.fixture(autouse=True)
@@ -1986,34 +2061,92 @@ def test_status_in_a_fresh_process_resumes_the_same_question(capsys, home):
     assert doc["next_action"]["question_id"] == "customer.goals.01"
 
 
-def test_answer_without_a_target_question_is_refused_with_exit_2(capsys, home, tmp_path):
+def test_answer_without_a_target_question_is_refused_with_exit_2(
+    capsys, home, tmp_path
+):
     _, started = run(["start", "--frame", "customer", "--target", "org/repo"], capsys)
     sid = started["next_action"]["session_id"]
     payload = tmp_path / "a.yaml"
     payload.write_text(PAYLOAD, encoding="utf-8")
-    run(["answer", "--session", sid, "--role", "product", "--file", str(payload)], capsys)
-    run(["answer", "--session", sid, "--question", "customer.jobs.01",
-         "--role", "product", "--file", str(payload)], capsys)
-    code, doc = run(["answer", "--session", sid, "--question", "customer.jobs.01",
-                     "--role", "product", "--file", str(payload)], capsys)
+    run(
+        ["answer", "--session", sid, "--role", "product", "--file", str(payload)],
+        capsys,
+    )
+    run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.jobs.01",
+            "--role",
+            "product",
+            "--file",
+            str(payload),
+        ],
+        capsys,
+    )
+    code, doc = run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.jobs.01",
+            "--role",
+            "product",
+            "--file",
+            str(payload),
+        ],
+        capsys,
+    )
     assert code == 0 or code == 10, "an identical replay is a no-op, not a refusal"
     assert doc["operation"]["status"] == "ok"
 
 
-def test_a_conflicting_answer_is_refused_and_supersede_accepts_it(capsys, home, tmp_path):
+def test_a_conflicting_answer_is_refused_and_supersede_accepts_it(
+    capsys, home, tmp_path
+):
     _, started = run(["start", "--frame", "customer", "--target", "org/repo"], capsys)
     sid = started["next_action"]["session_id"]
     first, second = tmp_path / "1.yaml", tmp_path / "2.yaml"
     first.write_text(PAYLOAD, encoding="utf-8")
-    second.write_text(PAYLOAD.replace("cut order loss", "different goal"), encoding="utf-8")
+    second.write_text(
+        PAYLOAD.replace("cut order loss", "different goal"), encoding="utf-8"
+    )
     run(["answer", "--session", sid, "--role", "product", "--file", str(first)], capsys)
-    code, doc = run(["answer", "--session", sid, "--question", "customer.goals.01",
-                     "--role", "product", "--file", str(second)], capsys)
+    code, doc = run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.goals.01",
+            "--role",
+            "product",
+            "--file",
+            str(second),
+        ],
+        capsys,
+    )
     assert code == 2
     assert doc["operation"] == {"status": "refused", "reason": "answer_conflict"}
     assert doc["lifecycle"] == "awaiting_input", "a refusal keeps the axes populated"
-    code, _ = run(["answer", "--session", sid, "--question", "customer.goals.01",
-                   "--role", "product", "--file", str(second), "--supersede"], capsys)
+    code, _ = run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.goals.01",
+            "--role",
+            "product",
+            "--file",
+            str(second),
+            "--supersede",
+        ],
+        capsys,
+    )
     assert code == 20
 
 
@@ -2073,7 +2206,9 @@ from discovery.session import Session, SessionHeader, SessionUnreadable
 
 
 def sessions_root() -> Path:
-    return Path(os.environ.get("DISCOVERY_HOME", Path.home() / ".discovery")) / "sessions"
+    return (
+        Path(os.environ.get("DISCOVERY_HOME", Path.home() / ".discovery")) / "sessions"
+    )
 
 
 def build_source() -> QuestionSource:
@@ -2086,7 +2221,11 @@ def _issue_if_needed(session: Session, source: QuestionSource) -> dict:
     events = session.journal.events()
     if session.header.source_pin != source.pin:
         session.journal.append(
-            {"event": SOURCE_PIN_CHANGED, "from": session.header.source_pin, "to": source.pin}
+            {
+                "event": SOURCE_PIN_CHANGED,
+                "from": session.header.source_pin,
+                "to": source.pin,
+            }
         )
     question = next_question(events, source, session.header.frame)
     if question is None:
@@ -2130,9 +2269,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         target=args.target,
         traces_to=list(args.traces_to or []),
         source_pin=source.pin,
-        created_at=__import__("datetime").datetime.now(
-            __import__("datetime").UTC
-        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        created_at=__import__("datetime")
+        .datetime.now(__import__("datetime").UTC)
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     session = Session.create(sessions_root(), header)
     return _emit(_envelope(session, source))
@@ -2159,14 +2298,19 @@ def cmd_answer(args: argparse.Namespace) -> int:
         envelope = _envelope(session, source)
         return _emit(
             protocol.refused(
-                protocol.NO_TARGET_QUESTION, envelope.lifecycle, envelope.gate,
-                envelope.next_action, envelope.findings,
+                protocol.NO_TARGET_QUESTION,
+                envelope.lifecycle,
+                envelope.gate,
+                envelope.next_action,
+                envelope.findings,
             )
         )
 
     new_id = answer_id(session.header.session_id, target, args.role, raw)
     existing = [
-        e for e in events if e.get("event") == ANSWER_RECORDED and e["question_id"] == target
+        e
+        for e in events
+        if e.get("event") == ANSWER_RECORDED and e["question_id"] == target
     ]
     if existing:
         if existing[-1]["answer_id"] == new_id:
@@ -2175,20 +2319,28 @@ def cmd_answer(args: argparse.Namespace) -> int:
             envelope = _envelope(session, source)
             return _emit(
                 protocol.refused(
-                    protocol.ANSWER_CONFLICT, envelope.lifecycle, envelope.gate,
-                    envelope.next_action, envelope.findings,
+                    protocol.ANSWER_CONFLICT,
+                    envelope.lifecycle,
+                    envelope.gate,
+                    envelope.next_action,
+                    envelope.findings,
                 )
             )
         session.journal.append(
             {
-                "event": ANSWER_SUPERSEDED, "question_id": target,
-                "from": existing[-1]["answer_id"], "to": new_id,
+                "event": ANSWER_SUPERSEDED,
+                "question_id": target,
+                "from": existing[-1]["answer_id"],
+                "to": new_id,
             }
         )
     session.journal.append(
         {
-            "event": ANSWER_RECORDED, "question_id": target, "answer_id": new_id,
-            "participant_role": args.role, "payload": raw,
+            "event": ANSWER_RECORDED,
+            "question_id": target,
+            "answer_id": new_id,
+            "participant_role": args.role,
+            "payload": raw,
         }
     )
     return _emit(_envelope(session, source))
@@ -2201,7 +2353,9 @@ def cmd_brief(args: argparse.Namespace) -> int:
     result = render_and_gate(session.header, events, session.directory)
     session.write_artifact(Path(args.out), result.text)
     lifecycle = compute_lifecycle(events, source, session.header.frame)
-    next_action = {} if lifecycle != AWAITING_INPUT else _issue_if_needed(session, source)
+    next_action = (
+        {} if lifecycle != AWAITING_INPUT else _issue_if_needed(session, source)
+    )
     return _emit(protocol.ok(lifecycle, result.status, next_action, result.findings))
 
 
@@ -2296,7 +2450,15 @@ from discovery import cli
 from discovery.questions import Question, StaticQuestionSource
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "discovery"
-FORBIDDEN_MODULES = {"socket", "http", "urllib", "requests", "httpx", "subprocess", "asyncio"}
+FORBIDDEN_MODULES = {
+    "socket",
+    "http",
+    "urllib",
+    "requests",
+    "httpx",
+    "subprocess",
+    "asyncio",
+}
 
 CATALOGUE = {"customer": [Question("customer.goals.01", "goals", "What problem?")]}
 PAYLOAD = "text: t\nentries:\n  - id: G-01\n    body: cut order loss\n"
@@ -2305,7 +2467,9 @@ PAYLOAD = "text: t\nentries:\n  - id: G-01\n    body: cut order loss\n"
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("DISCOVERY_HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(cli, "build_source", lambda: StaticQuestionSource("pin-1", CATALOGUE))
+    monkeypatch.setattr(
+        cli, "build_source", lambda: StaticQuestionSource("pin-1", CATALOGUE)
+    )
 
 
 def core_modules() -> list[Path]:
@@ -2322,7 +2486,9 @@ def test_core_imports_no_network_or_process_launcher():
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module.split(".")[0]]
             offenders += [(path.name, n) for n in names if n in FORBIDDEN_MODULES]
-    assert offenders == [], f"core must not reach the network or spawn processes: {offenders}"
+    assert offenders == [], (
+        f"core must not reach the network or spawn processes: {offenders}"
+    )
 
 
 def test_a_full_run_writes_only_under_the_session_root_and_the_brief_path(
@@ -2347,11 +2513,14 @@ def test_a_full_run_writes_only_under_the_session_root_and_the_brief_path(
     created = {p for p in tmp_path.rglob("*")} - before
     root = tmp_path / "home" / "sessions"
     stray = [
-        p for p in created
+        p
+        for p in created
         if p != out and root not in p.parents and p != root and not p.is_dir()
     ]
     assert stray == [], f"wrote outside the allowed set: {stray}"
-    assert list(workdir.iterdir()) == [], "nothing may be written to the working directory"
+    assert list(workdir.iterdir()) == [], (
+        "nothing may be written to the working directory"
+    )
 
 
 def test_the_runtime_writes_no_downstream_artifact(tmp_path, capsys):
@@ -2477,7 +2646,9 @@ from pathlib import Path
 from discovery.contract.gate_check import FRAMES
 from discovery.questions import Question
 
-MARKER_RE = re.compile(r"<!--\s*coverage_key:\s*([\w.]+)\s*;\s*produces:\s*([\w,\s]*)-->")
+MARKER_RE = re.compile(
+    r"<!--\s*coverage_key:\s*([\w.]+)\s*;\s*produces:\s*([\w,\s]*)-->"
+)
 HEADING_RE = re.compile(r"^###\s+(.*)$")
 BULLET_RE = re.compile(r"^-\s+(.*)$")
 
@@ -2562,7 +2733,11 @@ class BankQuestionSource:
                 continue
             for number, text in enumerate(topic.questions, start=1):
                 out.append(
-                    Question(f"{frame}.{topic.coverage_key}.{number:02d}", topic.coverage_key, text)
+                    Question(
+                        f"{frame}.{topic.coverage_key}.{number:02d}",
+                        topic.coverage_key,
+                        text,
+                    )
                 )
         return out
 ```
@@ -2624,7 +2799,9 @@ def test_the_real_bank_serves_questions_for_both_frames():
 
 
 def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
-    code, started = drive(["start", "--frame", "customer", "--target", "org/repo"], capsys)
+    code, started = drive(
+        ["start", "--frame", "customer", "--target", "org/repo"], capsys
+    )
     assert code == 20
     sid = started["next_action"]["session_id"]
 
@@ -2644,8 +2821,17 @@ def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
             encoding="utf-8",
         )
         drive(
-            ["answer", "--session", sid, "--question", question["question_id"],
-             "--role", "product", "--file", str(payload)],
+            [
+                "answer",
+                "--session",
+                sid,
+                "--question",
+                question["question_id"],
+                "--role",
+                "product",
+                "--file",
+                str(payload),
+            ],
             capsys,
         )
 
@@ -2660,8 +2846,11 @@ def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
 def _id_for(coverage_key: str, n: int) -> str:
     from discovery.contract.gate_check import FRAMES
 
-    prefix = FRAMES["customer"]["required"].get(coverage_key) or \
-        FRAMES["customer"]["optional"].get(coverage_key) or "G"
+    prefix = (
+        FRAMES["customer"]["required"].get(coverage_key)
+        or FRAMES["customer"]["optional"].get(coverage_key)
+        or "G"
+    )
     return f"{prefix}-{n:02d}"
 ```
 

@@ -18,13 +18,17 @@
 🔴 P0 | ⬜ TODO | Est: 2h
 
 **Checklist:**
-- [ ] `pyproject.toml`: пакет `src/discovery`, зависимость `pyyaml`, ruff line-length 88, `per-file-ignores = ["ALL"]` на вендоренный `gate_check.py`
-- [ ] `tools/vendor_pull.py` копирует контракт и линтер и пишет `PINNED.txt` (upstream, commit, `path sha256`)
-- [ ] Вендоренные `DISCOVERY-BRIEF-CONTRACT.md` и `gate_check.py` лежат в `src/discovery/contract/` и импортируются как `discovery.contract.gate_check`
+- [ ] Проверить базу (она **уже готова**, не пересоздавать): `uv run pytest` стартует, `ruff check`/`format --check` чисты, `discovery.contract.gate_check` импортируется и отдаёт оба фрейма — при расхождении остановиться с отчётом
+- [ ] `tools/vendor_pull.py` копирует контракт и линтер и пишет `PINNED.txt` (upstream, commit, `path sha256`); назначение берётся из `VENDOR_DEST`, иначе `src/discovery/contract`
+- [ ] Тест инструмента **герметичный**: поддельный upstream в `tmp_path`, никакого соседнего чекаута — внутри worktree его и нет
+- [ ] Вендоренные `DISCOVERY-BRIEF-CONTRACT.md` и `gate_check.py` **уже лежат** в `src/discovery/contract/` (пред-вендоринг на базовой ветке); задача добавляет `__init__.py` и делает их импортируемыми как `discovery.contract.gate_check`
 - [ ] `tests/test_vendored_copy.py` зелёный: пин называет 40-символьный коммит, файлы совпадают с digest'ами, `FRAMES` и `check()` доступны
 - [ ] Вендоренные файлы не отредактированы ни на байт
 
 **Traces to:** план Task 1, спека §4
+**Примечание:** вендоринг — одноразовое действие разработчика, требующее доступа к
+upstream-чекауту, которого внутри maestro-worktree нет (`../discovery-toolkit` резолвится
+рядом с worktree). Поэтому копия кладётся на базовую ветку до прогона; задача её не тянет.
 **Depends on:** —
 **Blocks:** [TASK-002], [TASK-003], [TASK-007]
 
@@ -35,7 +39,8 @@
 - [ ] `tools/check_vendor.py` с режимами `consistency` / `provenance` / `drift`, коды выхода 0/1/3
 - [ ] `provenance` сравнивает байты с upstream-деревом на пиненом коммите; недоступность → `unknown` (exit 3), никогда не `ok`
 - [ ] Негативный тест: `consistency` не описывает себя как доказательство происхождения
-- [ ] `drift` красит job красным при `unknown`; порог протухания 8 дней при недельном расписании
+- [ ] `drift` красит job красным при `unknown`; **свежесть самой вахты не проверяется изнутри job'а** — это вечная блокировка (первый прогон не имеет предыдущего успеха), её ловит внешний наблюдатель
+- [ ] Манифест `PINNED.txt` сам предмет проверки: удаление строки не должно тихо выводить файл из-под обеих гарантий (`EXPECTED_SURFACE` + регресс-тест)
 - [ ] Оба workflow заведены: `vendor-integrity` (PR) и `vendor-drift` (scheduled)
 
 **Traces to:** план Task 2, спека §4
@@ -198,7 +203,9 @@
 🟡 P1 | ⬜ TODO | Est: 3h
 
 **Checklist:**
-- [ ] Фреймы вендорятся с обновлением `PINNED.txt`
+- [ ] Фреймы **пред-вендорены** на базовую ветку с обновлением `PINNED.txt` (та же причина, что у TASK-001: upstream вне worktree)
+- [ ] Пути банка читаются по реальной раскладке toolkit (`.claude/skills/discovery-interview/frames/`), а пишутся плоско в `contract/frames/` — отображение source→dest, а не общий префикс
+- [ ] `EXPECTED_SURFACE` расширен обоими файлами банка
 - [ ] `parse_frame` читает маркер `coverage_key` / `produces`, ключ не угадывается по заголовку
 - [ ] Инвариант: каждый required-ключ фрейма заявлен ≥1 темой; нарушение — error
 - [ ] `produces` сверяется с префиксом из `FRAMES`; `coverage_key: none` легитимен

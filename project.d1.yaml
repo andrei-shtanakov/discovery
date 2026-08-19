@@ -1,0 +1,75 @@
+# Догоняющий прогон D1 — отдельный single-workstream конфиг.
+#
+# Основной `project.yaml` не трогаем: он описывает всю арку и остаётся
+# каноническим. Здесь один воркстрим, потому что A1/B/C уже слиты в
+# pilot/runtime-v1 (merge commit 31f3cd58706c) — полный перезапуск прогнал бы
+# их заново и не доказал бы ничего нового.
+#
+# depends_on пуст намеренно: единственная зависимость D1 — содержимое base
+# branch, и она уже выполнена.
+
+project: discovery-runtime-v1-d1
+description: 'Догоняющий прогон одного воркстрима D1 (TASK-012, TASK-013). A1, B и C выполнены и слиты
+  в base branch предыдущим прогоном (01M0CH042X09RYH47GR7WJSNM5, merge commit 31f3cd58706c); их результат
+  — содержимое base branch, а не task-level зависимости.
+
+  '
+repo_url: https://github.com/andrei-shtanakov/discovery
+repo_path: ~/labs/all_ai_orchestrators/discovery
+workspace_base: ~/labs/all_ai_orchestrators/discovery-maestro-ws
+max_concurrent: 1
+base_branch: pilot/runtime-v1
+branch_prefix: ws/
+auto_pr: false
+spec_runner:
+  max_retries: 2
+  task_timeout_minutes: 30
+  claude_model: sonnet
+  test_command: uv run pytest
+  run_tests_on_done: true
+  lint_command: uv run ruff check . && uv run ruff format --check .
+  run_lint_on_done: true
+  extra_executor_config:
+    executor:
+      execution_mode: tdd
+      tdd_runner: pytest
+workstreams:
+- id: d1-cli
+  title: D1 — CLI поверх ядра и граница author ≠ execute
+  description: "Выполнить TASK-012 и TASK-013 из spec/tasks.md по плану\ndocs/superpowers/plans/2026-08-18-discovery-runtime-v1.md\
+    \ (Task 12–13).\n\nCLI композирует и не держит собственных правил. Выдача вопроса\nперсистится ДО\
+    \ возврата команды — иначе падение между возвратом и\nзаписью делает пришедший ответ неатрибутируемым.\
+    \ Повтор того же\nanswer_id — no-op; конфликтующий ответ отвергается с exit 2 и\nСОХРАНЁННЫМИ осями;\
+    \ с --supersede в журнал ложатся оба события.\nГраница проверяется capability-тестом (разрешённые\
+    \ записи + отсутствие\nсетевых и process-launch импортов в ядре), а не поиском строк.\n\nbuild_source()\
+    \ в этом воркстриме возвращает пустой StaticQuestionSource —\nбанк подключается в D2 после снятия\
+    \ блокера discovery-toolkit#4.\n--- МЕТА-ИНСТРУКЦИЯ ГЕНЕРАТОРУ СПЕКИ (НЕ требование к продукту) ---\n\
+    Правило оформления файла `spec/maestro-tasks.md`, который ты сейчас\nпишешь. НЕ заводить его как REQ/NFR/TASK\
+    \ и не упоминать в требованиях:\nразрабатываемый runtime не пишет `tasks.md` вообще — это его граница\n\
+    author ≠ execute. Правило адресовано тебе как генератору, а не коду.\n\nМета-строка под каждым заголовком\
+    \ `### TASK-NNN: …` — РОВНО вида:\n\n    \U0001F534 P0 | ⬜ TODO | Est: 2h\n\nприоритет, затем СТАТУС\
+    \ (TODO, IN_PROGRESS, REVIEW, DONE, BLOCKED),\nзатем оценка. Без жирной разметки внутри мета-строки.\
+    \ `**Depends on:**`\nи `**Blocks:**` — отдельными строками ниже, НЕ внутри мета-строки.\nПроверено\
+    \ боем 2026-08-19: генератор выдал\n`\U0001F534 **P0** | Est: **2h** | **Depends on:** …`, и валидатор\
+    \ spec-runner\nотверг файл целиком (spec-runner#301).\n--- конец мета-инструкции ---\n\nPRE-CHECK\
+    \ ПЕРЕД ЗАВЕРШЕНИЕМ ЛЮБОГО ШАГА. Каждый создаваемый или изменяемый\nPython-файл обязан пройти `uv\
+    \ run ruff check <file>` и\n`uv run ruff format --check <file>` при `line-length = 88` ДО завершения\n\
+    шага. Особенно это относится к `tests/test_task_NNN_red.py`: checkpoint\nзамораживает его побайтово\
+    \ и отказывается подтверждать RED при любом\nlint/format-finding, а это фатальная ошибка без ретрая.\
+    \ Длинные `assert` и\nих сообщения переносить через скобки. Подавлять `# noqa` нельзя.\nПроверено\
+    \ боем 2026-08-19: прогон дважды встал на одной и той же строке\nсобственного red-теста агента — сообщение\
+    \ ассерта длиной 89 символов.\n\n      ЗАВИСИМОСТИ В ЛОКАЛЬНОЙ СПЕКЕ. Канонический `spec/tasks.md`\
+    \ сохраняет\n      cross-workstream зависимости как trace арки. В локальной\n      `spec/maestro-tasks.md`\
+    \ они НЕ копируются: B и C уже удовлетворены\n      содержимым base branch. Сгенерировать только TASK-012\
+    \ и TASK-013;\n      у TASK-012 `**Depends on:** —`, у TASK-013 `**Depends on:** [TASK-012]`.\n  \
+    \    Любая другая task-level зависимость — ошибка генерации.\n      Проверено боем 2026-08-19: генератор\
+    \ перенёс пять внешних ссылок\n      (TASK-003/005/006/010/011), и валидатор отверг файл до запуска\
+    \ агента.\n"
+  scope:
+  - src/discovery/cli.py
+  - tests/test_cli.py
+  - tests/test_boundary.py
+  - tests/test_task_012_red.py
+  - tests/test_task_013_red.py
+  depends_on: []
+  priority: 80
