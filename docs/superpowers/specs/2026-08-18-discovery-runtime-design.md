@@ -148,6 +148,29 @@ two bank versions can say so instead of looking uniform.
 would let a re-run ask a different question, leaving the arriving answer
 unattributable.
 
+**An answer arrives already typed.** The brief's body is not prose: `FR-01` carries a
+`Priority` and an `Acceptance`, `FR` traces to a `G`/`J`, `M` traces to a `G`. Nothing
+deterministic derives those from free text — that step is interpretation, and
+interpretation is what the core excludes. So the payload of `answer` is a YAML document
+with two parts: `text`, the verbatim answer kept for provenance and the L2 tests, and
+`entries`, the typed contract entries. The interviewer — a person, or an agent running the
+`discovery-interview` skill — does the interpreting; the runtime formats, counts and gates.
+This is the same line the whole design draws: methodology upstream in the toolkit,
+determinism here.
+
+```yaml
+text: |
+  we lose orders when the courier app times out
+entries:
+  - id: G-01
+    body: cut order loss from courier timeouts
+  - id: FR-01
+    body: retry a timed-out courier call
+    traces: G-01
+    Priority: Must
+    Acceptance: a timed-out call is retried twice before the order is failed
+```
+
 **Answers target a question, not a key.** `answer` takes `--question <id>`; with
 it omitted the target is `next_action.question_id`, and the command refuses if
 that is unset. Answering an open question that is not the current one is
@@ -269,7 +292,7 @@ CLI surface, four commands, all emitting the status above:
 ```
 start  --frame {customer,engineer} --target <repo> [--traces-to <path>...]
 status --session <id> [--json]
-answer --session <id> [--question <id>] --role <participant_role> --file <path>|- [--supersede]
+answer --session <id> [--question <id>] --role <participant_role> --file <payload.yaml>|- [--supersede]
 brief  --session <id> --out <brief_path>
 ```
 
