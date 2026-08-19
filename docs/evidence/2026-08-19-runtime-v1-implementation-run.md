@@ -1,0 +1,49 @@
+# runtime-v1 — implementation run (maestro)
+
+Открыт **на запуске**, до первого агента (spec §11 readiness). Живая приёмка —
+отдельный прогон и отдельный файл доказательств (spec §12, TASK-016).
+
+## Объявление прогона
+
+| | |
+|---|---|
+| Режим (ADR-ECO-007) | `ecosystem-development` |
+| `write_scope` | `{discovery}` — целевой репо не входит; его добавляет только прогон живой приёмки |
+| Конфиг | `project.yaml`, Mode-2, `maestro orchestrate` |
+| Базовая ветка | `pilot/runtime-v1` (master не трогается; человеческий гейт — финальный PR) |
+| Воркстримы | `a1-contract` → (`b-state` ∥ `c-protocol`) → `d1-cli` |
+| Задачи | TASK-001…013 из `spec/tasks.md` (13 из 16; A2 и D2 вне прогона) |
+| `max_concurrent` | 2 |
+| Модель | sonnet, зафиксирована в `spec_runner.claude_model` |
+
+## Состояние на запуске
+
+**Launch commit: `c9398edae8912d4244125cf580309c587decced9`** — HEAD `pilot/runtime-v1`
+в момент открытия этого файла (мерж PR #8 в master). Коммит с этим файлом —
+его прямой потомок и добавляет только его; бэклог, план и конфиг, по которым
+работают агенты, — это дерево launch commit'а.
+
+Один SHA вместо per-file хешей: бэклог, план и конфиг лежат вне scope всех
+воркстримов, поэтому их правка агентом — запись вне scope, которую ловит
+scope-гейт и фиксирует история `ws/*` вместе с диффом.
+
+Инструменты: spec-runner 2.33.2, claude 2.1.235 (Claude Code), uv 0.11.23.
+
+## Readiness (fail-closed, до первого агента)
+
+- [x] `maestro validate project.yaml` — 0 ошибок (warning'и `scope-no-match` на
+      ещё не созданные файлы; `--strict` не применяется, причина названа в конфиге)
+- [x] identity репо: `git@github.com:andrei-shtanakov/discovery.git`, дерево чисто
+- [x] `git config --local core.worktree` пуст
+- [x] `workspace_base` (`discovery-maestro-ws`) свободен
+- [x] число задач сверено: 16 в бэклоге, 13 в прогоне
+- [x] launch commit записан выше
+
+## Ход прогона
+
+Заполняется по мере выполнения.
+
+## Сверка после прогона
+
+Заполняется после финального PR: статусы TASK-001…013 в `spec/tasks.md`,
+расхождения сгенерированных `spec/maestro-*` с планом, записи вне scope.
