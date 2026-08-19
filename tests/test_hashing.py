@@ -22,10 +22,31 @@ def test_leading_and_trailing_whitespace_is_not_trimmed():
     assert canonical_answer_bytes("  padded  ") == b"  padded  "
 
 
+def test_canonical_answer_bytes_of_empty_string_is_empty():
+    assert canonical_answer_bytes("") == b""
+
+
+def test_answer_id_is_known_sha256_of_nul_joined_fields():
+    expected = "sha256:" + hashlib.sha256(b"s1\x00q1\x00product\x00hello").hexdigest()
+    assert answer_id("s1", "q1", "product", "hello") == expected
+
+
 def test_answer_id_changes_when_only_participant_role_changes():
     product = answer_id("s1", "q1", "product", "same text")
     engineer = answer_id("s1", "q1", "engineer", "same text")
     assert product != engineer
+
+
+def test_answer_id_changes_when_only_session_id_changes():
+    s1 = answer_id("s1", "q1", "product", "same text")
+    s2 = answer_id("s2", "q1", "product", "same text")
+    assert s1 != s2
+
+
+def test_answer_id_changes_when_only_question_id_changes():
+    q1 = answer_id("s1", "q1", "product", "same text")
+    q2 = answer_id("s1", "q2", "product", "same text")
+    assert q1 != q2
 
 
 def test_field_concatenation_does_not_collide():

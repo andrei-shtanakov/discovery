@@ -27,8 +27,14 @@ def answer_id(
 
     Joins ``session_id``, ``question_id``, ``participant_role`` and the
     canonical bytes of ``text`` with a NUL separator before hashing, so a
-    role change on an otherwise-identical answer changes the id, and
-    field concatenation across the first three fields cannot collide.
+    role change on an otherwise-identical answer changes the id, and a
+    value shifting across the ``session_id``/``question_id``/
+    ``participant_role`` boundary (e.g. trailing text of one field moving
+    into the next) cannot collide with the original split. This does not
+    protect against a NUL byte embedded *within* one of those three
+    fields: callers must treat ``session_id``, ``question_id`` and
+    ``participant_role`` as system-controlled identifiers, not arbitrary
+    user text.
     """
     digest = hashlib.sha256(
         session_id.encode("utf-8")
