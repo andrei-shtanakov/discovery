@@ -89,7 +89,8 @@
       каноном ловят две раздельные гарантии (copy-integrity в PR-гейте против
       upstream-дерева на коммите из `PINNED.txt`; scheduled upstream-drift), недоступный
       upstream ⇒ `unknown`, не `pass`. Дизайн §4.
-- [ ] Вендорить банк вопросов (`frames/*.md`) + парс маркеров `coverage_key` + fail-closed инвариант полноты @owner:github:andrei-shtanakov @id:vendored-bank
+- [x] Вендорить банк вопросов (`frames/*.md`) + парс маркеров `coverage_key` + fail-closed инвариант полноты @owner:github:andrei-shtanakov @id:vendored-bank
+      **Сделано (PR #10).** Фреймы пред-вендорены на базовую ветку с `ee93092` (upstream недостижим из maestro-worktree), ключ манифеста — upstream-путь, отображение source→dest в `vendor_pull.FRAMES`, `EXPECTED_SURFACE` из четырёх ключей, парсер `bank.py`. Банк отдаёт 19 вопросов для customer и 15 для engineer; provenance зелёный.
       **Разблокирован 2026-08-19**: `discovery-toolkit#4` закрыт как выполненный (маркеры в банке с `ee93092`, оба крайних случая учтены — `feasibility_review` как процесс и `coverage_key: none`). Блокер снят задним числом: он был снят ещё до нашего прогона, мы этого не заметили.
       Нужен `QuestionSource.bank`. Ключ темы не выводится из ID-префикса заголовка **по
       построению**: `X-NN`/`Q-NN` сквозные (их порождают и feasibility-проход, и тема
@@ -103,6 +104,19 @@
       ADR TL;DR 2 и README запрещают писать `tasks.md`/design/execution-планы. Пока
       это утверждение в прозе; у соседа-аналога (dispatcher) такие инварианты
       проверяются кодом.
+- [ ] Живая приёмка стадии Need с реальным стейкхолдером (TASK-016) @owner:github:andrei-shtanakov @trigger:"PR #10 влит в master" @id:live-acceptance
+      Отдельный прогон и отдельный файл доказательств (дизайн §12), запускать от
+      `master` после мержа: леджер ссылается на коммит, который уже не перепишется.
+      Расширение `write_scope` на целевой репо объявляется ДО первой команды и
+      только на него; целевой — соседний репо воркспейса, конкретный называет
+      владелец при запуске. Порядок: `start` → exit 20 → процесс завершён →
+      `status`/`answer` из нового процесса → `lifecycle: complete` + `gate: pass` +
+      exit 0 → бриф в разрешённый путь целевого репо → независимый прогон
+      вендоренного гейта → леджер (session id, `transcript_sha256`, `brief_sha256`,
+      commit/PR). Объём разговора известен: customer 19 вопросов, engineer 15.
+      Тонкий бриф, валящий гейт, приёмкой не считается — интервью продолжается.
+      Пока не пройдено, статус арки — `implementation complete, live acceptance
+      pending`, **не** `accepted`.
 - [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests
 - [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark
       План §3: прогон живёт в нетрекаемом стенде `discovery-test`, фикстуры L0/L1 — в

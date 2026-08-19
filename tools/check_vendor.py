@@ -48,8 +48,15 @@ class Verdict:
 # What the vendored copy must contain. Without this, deleting a line from
 # PINNED.txt quietly drops that file from BOTH guarantees and leaves them
 # green: the manifest says WHAT gets checked, so the manifest is itself
-# something to check. Task 14 extends the set with the two frame files.
-EXPECTED_SURFACE = frozenset({"DISCOVERY-BRIEF-CONTRACT.md", "gate_check.py"})
+# something to check.
+EXPECTED_SURFACE = frozenset(
+    {
+        "DISCOVERY-BRIEF-CONTRACT.md",
+        "gate_check.py",
+        ".claude/skills/discovery-interview/frames/customer.md",
+        ".claude/skills/discovery-interview/frames/engineer.md",
+    }
+)
 
 
 def resolve_dest() -> Path:

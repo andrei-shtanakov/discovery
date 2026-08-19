@@ -18,14 +18,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Upstream-relative path -> vendored-relative path. FRAMES is the analogous
-# mapping for the question bank; it's gated behind --include-frames and left
-# empty/uninvoked in this task (out of scope, TASK-014).
+# Upstream-relative path -> vendored-relative path.
 CORE = {
     "DISCOVERY-BRIEF-CONTRACT.md": "DISCOVERY-BRIEF-CONTRACT.md",
     "gate_check.py": "gate_check.py",
 }
-FRAMES: dict[str, str] = {}
+# Not to be confused with discovery.contract.gate_check.FRAMES (the
+# required/optional coverage table) — different object, different module,
+# do not import or alias one in place of the other.
+FRAMES: dict[str, str] = {
+    ".claude/skills/discovery-interview/frames/customer.md": "frames/customer.md",
+    ".claude/skills/discovery-interview/frames/engineer.md": "frames/engineer.md",
+}
 
 
 def default_dest() -> Path:
@@ -76,14 +80,22 @@ def vendor_pull(upstream: Path, dest: Path, *, include_frames: bool = False) -> 
     url = upstream_url(upstream)
     head = upstream_head(upstream)
 
-    files_to_copy = {**CORE, **FRAMES} if include_frames else CORE
     digests: list[tuple[str, str]] = []
-    for upstream_rel, dest_rel in files_to_copy.items():
+    for upstream_rel, dest_rel in CORE.items():
         src_file = upstream / upstream_rel
         dest_file = dest / dest_rel
         shutil.copyfile(src_file, dest_file)
         digest = hashlib.sha256(dest_file.read_bytes()).hexdigest()
         digests.append((upstream_rel, digest))
+
+    if include_frames:
+        (dest / "frames").mkdir(parents=True, exist_ok=True)
+        for upstream_rel, dest_rel in FRAMES.items():
+            src_file = upstream / upstream_rel
+            dest_file = dest / dest_rel
+            shutil.copyfile(src_file, dest_file)
+            digest = hashlib.sha256(dest_file.read_bytes()).hexdigest()
+            digests.append((upstream_rel, digest))
 
     lines = [f"upstream: {url}", f"commit: {head}", ""]
     lines.extend(f"{name} {digest}" for name, digest in digests)

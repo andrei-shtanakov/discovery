@@ -31,7 +31,7 @@ from discovery.journal import (
 from discovery.lifecycle import AWAITING_INPUT, compute_lifecycle, next_question
 from discovery.payload import PayloadInvalid, parse_payload
 from discovery.protocol import Envelope
-from discovery.questions import QuestionSource, StaticQuestionSource
+from discovery.questions import QuestionSource
 from discovery.session import Session, SessionHeader, SessionUnreadable, write_artifact
 
 
@@ -51,9 +51,22 @@ def _journal(session_id: str) -> Journal:
     return Journal(_session_dir(session_id) / "journal.jsonl")
 
 
+def _pinned_commit() -> str:
+    """The upstream commit pinned in `discovery/contract/PINNED.txt`."""
+    pinned_txt = Path(__file__).resolve().parent / "contract" / "PINNED.txt"
+    for line in pinned_txt.read_text(encoding="utf-8").splitlines():
+        if line.startswith("commit:"):
+            return line.removeprefix("commit:").strip()
+    raise RuntimeError("PINNED.txt has no commit: line")
+
+
 def build_source() -> QuestionSource:
-    """Composition seam. D2 replaces the body with a bank-backed source."""
-    return StaticQuestionSource(pin="unpinned", catalogue={})
+    """Composition seam: a `BankQuestionSource` over the vendored frames,
+    pinned to the commit recorded in `discovery/contract/PINNED.txt`."""
+    from discovery.bank import BankQuestionSource
+
+    frames_dir = Path(__file__).resolve().parent / "contract" / "frames"
+    return BankQuestionSource(pin=_pinned_commit(), frames_dir=frames_dir)
 
 
 def _now() -> str:

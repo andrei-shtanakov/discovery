@@ -2552,18 +2552,29 @@ git commit -m "test(boundary): author != execute enforced as a capability"
 
 ### Task 14: The bank — vendored frames, markers, fail-closed invariant (WS-A2)
 
-**Blocked by:** `discovery-toolkit#4` (machine `coverage_key` markers). Do not start this task
-by inventing a heading heuristic; if the upstream marker format differs from what is assumed
-below, update this task first.
+**Unblocked.** `discovery-toolkit#4` is closed; the markers below are the real format, read
+from the vendored bytes at `ee93092`. Do not invent a heading heuristic.
+
+**The frames are already vendored.** `contract/frames/*.md` and their two `PINNED.txt` lines
+landed on the base branch before this run (commit `4664604`), for the same reason as Task 1:
+upstream is unreachable from a maestro worktree. Do **not** run `vendor_pull.py` against a real
+upstream, and do not edit a vendored byte. This task adds the *mapping and the checks* that
+make those bytes covered, plus the parser.
 
 **Files:**
-- Modify: `src/discovery/contract/PINNED.txt` (re-vendor with `--include-frames`)
-- Create: `src/discovery/contract/frames/customer.md`, `.../engineer.md` (vendored bytes)
+- Modify: `tools/vendor_pull.py` (fill `FRAMES`; create the destination subdirectory)
+- Modify: `tools/check_vendor.py` (`EXPECTED_SURFACE` covers both frame files)
+- Modify: `tests/test_vendor_pull.py`, `tests/test_check_vendor.py`
 - Create: `src/discovery/bank.py`
 - Test: `tests/test_bank.py`
 
+**Two things are called `FRAMES` and they are not the same.**
+`discovery.contract.gate_check.FRAMES` is the coverage table (required/optional keys and
+their id prefixes) — that is what `bank.py` consumes. `tools.vendor_pull.FRAMES` is the
+source→dest file mapping this task fills in. Never import one for the other.
+
 **Interfaces:**
-- Consumes: `FRAMES` (Task 1), `Question` (Task 7).
+- Consumes: `gate_check.FRAMES` (Task 1), `Question` (Task 7).
 - Produces: `Topic` dataclass `(coverage_key: str | None, produces: list[str], questions: list[str])`;
   `parse_frame(text: str) -> list[Topic]`; `BankInvalid` exception;
   `BankQuestionSource(pin: str, frames_dir: Path)` implementing `QuestionSource`, with
@@ -2581,11 +2592,17 @@ FRAME = """# Frame: customer
 ### 1. Problem and goals
 <!-- coverage_key: goals; produces: G -->
 - What problem are we solving?
-- Why now?
+- Walk me through two or three real situations from
+  your week.
 
 ### 9. Closing (always)
 <!-- coverage_key: none; produces: X,Q -->
 - Who else must we ask?
+
+## Extraction rules
+
+- Phrase the requirement in the stakeholder's words; never
+  pass interpretation off as what was said.
 """
 
 
@@ -2595,6 +2612,22 @@ def test_markers_are_read_not_guessed_from_headings():
     assert topics[0].produces == ["G"]
     assert len(topics[0].questions) == 2
     assert topics[1].coverage_key is None, "`none` is a legitimate topic without a key"
+
+
+def test_a_wrapped_bullet_is_one_question_not_a_truncated_one():
+    topics = parse_frame(FRAME)
+    assert topics[0].questions[1].endswith("from your week."), (
+        "a bullet wrapped at the margin is still one question — dropping "
+        "the continuation truncates it mid-sentence"
+    )
+
+
+def test_a_topic_ends_at_a_heading_of_any_level():
+    topics = parse_frame(FRAME)
+    assert len(topics) == 2, "`## Extraction rules` opens no topic"
+    assert topics[1].questions == ["Who else must we ask?"], (
+        "prose bullets under a later `##` section are not interview questions"
+    )
 
 
 def test_a_frame_missing_a_required_key_is_rejected(tmp_path):
@@ -2649,8 +2682,9 @@ from discovery.questions import Question
 MARKER_RE = re.compile(
     r"<!--\s*coverage_key:\s*([\w.]+)\s*;\s*produces:\s*([\w,\s]*)-->"
 )
-HEADING_RE = re.compile(r"^###\s+(.*)$")
+HEADING_RE = re.compile(r"^#{1,6}\s")
 BULLET_RE = re.compile(r"^-\s+(.*)$")
+CONTINUATION_RE = re.compile(r"^\s+(\S.*)$")
 
 
 class BankInvalid(Exception):
@@ -2665,6 +2699,12 @@ class Topic:
 
 
 def parse_frame(text: str) -> list[Topic]:
+    """Topics in declaration order, each opened by its own marker.
+
+    A topic ends at the next heading of ANY level, not just `###`: both frames
+    close with `## Coverage` and `## Правила извлечения`, whose bullets are
+    prose about extraction rather than questions to ask.
+    """
     topics: list[Topic] = []
     current: Topic | None = None
     for line in text.splitlines():
@@ -2681,9 +2721,17 @@ def parse_frame(text: str) -> list[Topic]:
             )
             topics.append(current)
             continue
+        if current is None:
+            continue
         bullet = BULLET_RE.match(line)
-        if bullet and current is not None:
+        if bullet:
             current.questions.append(bullet.group(1).strip())
+            continue
+        wrapped = CONTINUATION_RE.match(line)
+        if wrapped and current.questions:
+            # A bullet wrapped at the margin is still one question; dropping
+            # the tail would truncate what the interviewer reads out.
+            current.questions[-1] += " " + wrapped.group(1).strip()
     return topics
 
 
@@ -2742,17 +2790,70 @@ class BankQuestionSource:
         return out
 ```
 
-- [ ] **Step 4: Re-vendor the frames and run**
+- [ ] **Step 4: Bring the already-vendored bytes under both guarantees**
 
-Run: `uv run tools/vendor_pull.py ../discovery-toolkit --include-frames`
-Run: `uv run pytest tests/test_bank.py tests/test_vendored_copy.py -v`
-Expected: PASS. If the real upstream frames fail `_validate`, that is the invariant doing its
-job — report it on `discovery-toolkit#4` rather than loosening the check.
+The frames are on disk and in `PINNED.txt` already; what is missing is the mapping that
+would re-produce them and the surface check that keeps them covered.
+
+In `tools/vendor_pull.py`, fill the mapping — upstream path on the left, the flat vendored
+path on the right — and create the destination subdirectory before copying, because
+`frames/` does not exist in a fresh dest and `--include-frames` would otherwise fail on the
+first file:
+
+```python
+FRAMES = {
+    ".claude/skills/discovery-interview/frames/customer.md": "frames/customer.md",
+    ".claude/skills/discovery-interview/frames/engineer.md": "frames/engineer.md",
+}
+```
+
+```python
+        dest_file = dest / dest_rel
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+```
+
+In `tools/check_vendor.py`, extend the expected surface with the same two manifest keys —
+the upstream paths, since that is what `read_pinned()` returns and what `provenance` fetches:
+
+```python
+EXPECTED_SURFACE = frozenset(
+    {
+        "DISCOVERY-BRIEF-CONTRACT.md",
+        "gate_check.py",
+        ".claude/skills/discovery-interview/frames/customer.md",
+        ".claude/skills/discovery-interview/frames/engineer.md",
+    }
+)
+```
+
+Extend the existing tests: `tests/test_vendor_pull.py` proves `--include-frames` writes both
+frames into a nested dest from a hermetic fake upstream in `tmp_path` (never a real
+checkout — there is none inside the worktree), and `tests/test_check_vendor.py` proves that
+dropping a frame line from `PINNED.txt` turns `consistency` red instead of leaving it green.
+
+Run: `uv run pytest tests/test_bank.py tests/test_vendored_copy.py tests/test_vendor_pull.py tests/test_check_vendor.py -v`
+Run: `uv run tools/check_vendor.py consistency`
+Expected: PASS, and `consistency: ok — 4 files match their recorded digests`.
+
+Add one assertion against the real vendored bytes, not just the synthetic fixture — the
+invariant is worth nothing if it only ever sees a fixture that was written to satisfy it:
+
+```python
+def test_the_vendored_frames_satisfy_the_invariant():
+    frames = Path(bank.__file__).parent / "contract" / "frames"
+    for frame in ("customer", "engineer"):
+        questions = BankQuestionSource("pin-vendored", frames).questions(frame)
+        assert questions, f"the vendored {frame} bank must serve questions"
+        assert all(q.question_id.startswith(f"{frame}.") for q in questions)
+```
+
+If the real frames ever fail `_validate`, that is the invariant doing its job: report it
+upstream rather than loosening the check.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/discovery/bank.py src/discovery/contract tests/test_bank.py
+git add src/discovery/bank.py tools tests
 git commit -m "feat(bank): vendored frames with marker-driven, fail-closed coverage"
 ```
 
@@ -2762,11 +2863,20 @@ git commit -m "feat(bank): vendored frames with marker-driven, fail-closed cover
 
 **Files:**
 - Modify: `src/discovery/cli.py:build_source`
-- Test: `tests/test_end_to_end.py`
+- Modify: `src/discovery/lifecycle.py:compute_lifecycle` (the §5 amendment below)
+- Test: `tests/test_end_to_end.py`, `tests/test_lifecycle.py`
 
 **Interfaces:**
 - Consumes: `BankQuestionSource` (Task 14), the CLI (Task 12).
 - Produces: `build_source()` returning a `BankQuestionSource` pinned to the vendored commit.
+
+**The §5 amendment lands here.** Until now an empty `QuestionSource` reported
+`lifecycle: complete` before a single question had been asked — the rule was satisfied
+vacuously. The spec now requires the source to declare at least one question for the frame
+before `complete` is available; an empty source is `lifecycle: unknown`. Only `lifecycle`
+collapses: `gate` is still computed, `operation.status` stays `ok`, and `exit_code` already
+maps an `unknown` axis to `1` without changing. This is the same class of defect the whole
+arc is built against — a definite state reported where the runtime holds no evidence.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2796,6 +2906,36 @@ def test_the_real_bank_serves_questions_for_both_frames():
     assert source.questions("customer"), "the vendored bank must answer for customer"
     assert source.questions("engineer"), "the vendored bank must answer for engineer"
     assert source.pin != "unpinned"
+
+
+def test_an_empty_source_is_unknown_not_complete(capsys):
+    """§5: `complete` needs the source to have declared at least one question."""
+    from discovery.lifecycle import UNKNOWN, compute_lifecycle
+    from discovery.questions import StaticQuestionSource
+
+    empty = StaticQuestionSource(pin="unpinned", catalogue={})
+
+    assert compute_lifecycle([], empty, "customer") == UNKNOWN, (
+        "a bank that serves nothing cannot establish that a conversation ended"
+    )
+
+
+def test_a_pending_question_outranks_an_empty_source():
+    """An issued, unanswered question is evidence the bank cannot retract."""
+    from discovery.lifecycle import AWAITING_INPUT, compute_lifecycle
+    from discovery.questions import StaticQuestionSource
+
+    events = [
+        {
+            "event": "question_asked",
+            "question_id": "customer.goals.01",
+            "coverage_key": "goals",
+            "question_text": "What problem are we solving?",
+        }
+    ]
+    empty = StaticQuestionSource(pin="unpinned", catalogue={})
+
+    assert compute_lifecycle(events, empty, "customer") == AWAITING_INPUT
 
 
 def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
@@ -2878,6 +3018,26 @@ def build_source() -> QuestionSource:
 
 Remove the now-unused `StaticQuestionSource` import from `cli.py`; the tests import it
 directly from `discovery.questions`.
+
+And amend `compute_lifecycle` — the projection gains its precondition:
+
+```python
+def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) -> str:
+    """`awaiting_input` iff a next question exists, `complete` otherwise —
+    except that a source declaring no question at all for the frame cannot
+    establish that a conversation ended, so it reports `unknown` (spec §5)."""
+    if next_question(events, source, frame) is not None:
+        return AWAITING_INPUT
+    if not source.questions(frame):
+        return UNKNOWN
+    return COMPLETE
+```
+
+The order is the whole change. `next_question` returns `None` for an empty source exactly
+as it does for an exhausted one, and reading that collision as `complete` is the bug. But
+the emptiness check goes *after* the pending check, not before: an issued, unanswered
+question is evidence in the journal that a conversation is under way, and a bank that goes
+empty between two calls cannot retract it. Only `complete` gains the precondition.
 
 - [ ] **Step 4: Run to verify it passes**
 

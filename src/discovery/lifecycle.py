@@ -4,7 +4,8 @@ Lifecycle is a pure function of the raw journal event list, never separate
 storage: `issued`/`answered_ids` fold the journal, `next_question` restores an
 already-issued question entirely from its own `question_asked` event (never
 by re-resolving its id against the current `QuestionSource`), and
-`compute_lifecycle` is a one-line projection of `next_question`.
+`compute_lifecycle` projects `next_question`, plus the §5 emptiness
+precondition (an empty source is `unknown`, not `complete`).
 """
 
 from __future__ import annotations
@@ -58,7 +59,15 @@ def next_question(
 
 
 def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) -> str:
-    """`awaiting_input` iff a next question exists, `complete` otherwise."""
-    if next_question(events, source, frame) is None:
-        return COMPLETE
-    return AWAITING_INPUT
+    """`awaiting_input` iff a next question exists.
+
+    A pending (issued, unanswered) question outranks an empty source: it is
+    checked first and, if found, always yields `awaiting_input`. Only once
+    nothing is pending does an empty source catalogue yield `unknown` rather
+    than `complete`.
+    """
+    if next_question(events, source, frame) is not None:
+        return AWAITING_INPUT
+    if not source.questions(frame):
+        return UNKNOWN
+    return COMPLETE
