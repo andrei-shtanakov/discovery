@@ -89,7 +89,8 @@
       каноном ловят две раздельные гарантии (copy-integrity в PR-гейте против
       upstream-дерева на коммите из `PINNED.txt`; scheduled upstream-drift), недоступный
       upstream ⇒ `unknown`, не `pass`. Дизайн §4.
-- [ ] Вендорить банк вопросов (`frames/*.md`) + парс маркеров `coverage_key` + fail-closed инвариант полноты @owner:github:andrei-shtanakov @id:vendored-bank
+- [x] Вендорить банк вопросов (`frames/*.md`) + парс маркеров `coverage_key` + fail-closed инвариант полноты @owner:github:andrei-shtanakov @id:vendored-bank
+      **Сделано (PR #10).** Фреймы пред-вендорены на базовую ветку с `ee93092` (upstream недостижим из maestro-worktree), ключ манифеста — upstream-путь, отображение source→dest в `vendor_pull.FRAMES`, `EXPECTED_SURFACE` из четырёх ключей, парсер `bank.py`. Банк отдаёт 19 вопросов для customer и 15 для engineer; provenance зелёный.
       **Разблокирован 2026-08-19**: `discovery-toolkit#4` закрыт как выполненный (маркеры в банке с `ee93092`, оба крайних случая учтены — `feasibility_review` как процесс и `coverage_key: none`). Блокер снят задним числом: он был снят ещё до нашего прогона, мы этого не заметили.
       Нужен `QuestionSource.bank`. Ключ темы не выводится из ID-префикса заголовка **по
       построению**: `X-NN`/`Q-NN` сквозные (их порождают и feasibility-проход, и тема
