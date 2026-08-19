@@ -29,6 +29,17 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.pyrefly]
+# "basic" matches the unconfigured default this project ran under before
+# this file existed; without it, adding a config switches pyrefly to its
+# stricter default preset, which flags src/discovery/contract/gate_check.py
+# (vendored bytes we must not edit — see ruff's extend-exclude above).
+preset = "basic"
+# tools/ is not a package under src/discovery (NFR-004 boundary) — tests
+# reach it via sys.path.insert + plain `import check_vendor`, so pyrefly
+# needs it on the search path to resolve that import.
+search-path = ["src", "tools"]
+
 [dependency-groups]
 dev = [
     "pyrefly>=1.2.0",

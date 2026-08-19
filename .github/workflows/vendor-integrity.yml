@@ -1,0 +1,10 @@
+name: vendor-integrity
+on: [pull_request]
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv run tools/check_vendor.py consistency
+      - run: uv run tools/check_vendor.py provenance
