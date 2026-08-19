@@ -50,6 +50,10 @@ class SessionHeaderLike(Protocol):
 
     frame: str
     traces_to: list[str]
+    created_at: str
+
+
+GENERATED_BY = "discovery-runtime"
 
 
 @dataclass(frozen=True)
@@ -212,6 +216,9 @@ def render_brief(
         "schema": "discovery-brief",
         "schema_version": 1,
         "spec_stage": "discovery",
+        "status": "draft",
+        "generated_by": GENERATED_BY,
+        "generated_at": header.created_at,
         "validation": validation,
         "interview": {"frame": frame, "sessions": _sessions(events)},
         "coverage": {**coverage, "gate_passed": _gate_passed(coverage, entries, frame)},
