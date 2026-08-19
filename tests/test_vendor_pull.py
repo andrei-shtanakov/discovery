@@ -15,12 +15,18 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 VENDOR_PULL = REPO_ROOT / "tools" / "vendor_pull.py"
 
 
-def _init_fake_upstream(upstream: Path) -> str:
+def _init_fake_upstream(upstream: Path, *, with_frames: bool = False) -> str:
     upstream.mkdir()
     (upstream / "DISCOVERY-BRIEF-CONTRACT.md").write_text(
         "# Discovery Brief Contract\n\nfake upstream content.\n"
     )
     (upstream / "gate_check.py").write_text("FRAMES = {'customer', 'engineer'}\n")
+
+    if with_frames:
+        frames_dir = upstream / ".claude" / "skills" / "discovery-interview" / "frames"
+        frames_dir.mkdir(parents=True)
+        (frames_dir / "customer.md").write_text("# Customer frame\n\nfake customer.\n")
+        (frames_dir / "engineer.md").write_text("# Engineer frame\n\nfake engineer.\n")
 
     subprocess.run(["git", "init"], cwd=upstream, check=True, capture_output=True)
     subprocess.run(
@@ -123,7 +129,7 @@ def test_vendor_pull_rejects_bad_argv(tmp_path):
 
 def test_vendor_pull_include_frames_flag_is_accepted(tmp_path):
     upstream = tmp_path / "upstream"
-    head = _init_fake_upstream(upstream)
+    head = _init_fake_upstream(upstream, with_frames=True)
     dest = tmp_path / "dest"
 
     result = subprocess.run(
@@ -136,3 +142,34 @@ def test_vendor_pull_include_frames_flag_is_accepted(tmp_path):
     assert result.returncode == 0, result.stderr
     pinned = (dest / "PINNED.txt").read_text()
     assert f"commit: {head}" in pinned
+
+
+def test_vendor_pull_include_frames_copies_and_pins_frame_files(tmp_path):
+    upstream = tmp_path / "upstream"
+    _init_fake_upstream(upstream, with_frames=True)
+    dest = tmp_path / "dest"
+
+    result = subprocess.run(
+        [sys.executable, str(VENDOR_PULL), str(upstream), "--include-frames"],
+        env={**os.environ, "VENDOR_DEST": str(dest)},
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    customer_upstream_rel = ".claude/skills/discovery-interview/frames/customer.md"
+    engineer_upstream_rel = ".claude/skills/discovery-interview/frames/engineer.md"
+    customer_src = upstream / customer_upstream_rel
+    engineer_src = upstream / engineer_upstream_rel
+    customer_dest = dest / "frames" / "customer.md"
+    engineer_dest = dest / "frames" / "engineer.md"
+
+    assert customer_dest.read_bytes() == customer_src.read_bytes()
+    assert engineer_dest.read_bytes() == engineer_src.read_bytes()
+
+    pinned = (dest / "PINNED.txt").read_text()
+    expected_customer_sha = hashlib.sha256(customer_src.read_bytes()).hexdigest()
+    expected_engineer_sha = hashlib.sha256(engineer_src.read_bytes()).hexdigest()
+    assert f"{customer_upstream_rel} {expected_customer_sha}" in pinned
+    assert f"{engineer_upstream_rel} {expected_engineer_sha}" in pinned
