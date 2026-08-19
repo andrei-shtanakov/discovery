@@ -6,6 +6,7 @@ with no neighbouring upstream checkout.
 """
 
 import hashlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -58,7 +59,7 @@ def test_vendor_pull_copies_files_and_writes_pinned_manifest(tmp_path):
 
     result = subprocess.run(
         [sys.executable, str(VENDOR_PULL), str(upstream)],
-        env={"VENDOR_DEST": str(dest), "PATH": "/usr/bin:/bin:/usr/local/bin"},
+        env={**os.environ, "VENDOR_DEST": str(dest)},
         capture_output=True,
         text=True,
     )
@@ -73,6 +74,7 @@ def test_vendor_pull_copies_files_and_writes_pinned_manifest(tmp_path):
     assert copied_gate.read_bytes() == gate_check.read_bytes()
 
     pinned = (dest / "PINNED.txt").read_text()
+    assert "upstream: " in pinned
     assert f"commit: {head}" in pinned
 
     expected_md_sha = hashlib.sha256(contract_md.read_bytes()).hexdigest()
@@ -95,7 +97,7 @@ def test_vendor_pull_defaults_dest_to_src_discovery_contract(tmp_path, monkeypat
     result = subprocess.run(
         [sys.executable, str(vendor_pull_copy), str(upstream)],
         cwd=fake_repo_root,
-        env={"PATH": "/usr/bin:/bin:/usr/local/bin"},
+        env=os.environ,
         capture_output=True,
         text=True,
     )
@@ -105,3 +107,32 @@ def test_vendor_pull_defaults_dest_to_src_discovery_contract(tmp_path, monkeypat
     assert (default_dest / "DISCOVERY-BRIEF-CONTRACT.md").exists()
     assert (default_dest / "gate_check.py").exists()
     assert (default_dest / "PINNED.txt").exists()
+
+
+def test_vendor_pull_rejects_bad_argv(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(VENDOR_PULL)],
+        env=os.environ,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "usage:" in result.stderr
+
+
+def test_vendor_pull_include_frames_flag_is_accepted(tmp_path):
+    upstream = tmp_path / "upstream"
+    head = _init_fake_upstream(upstream)
+    dest = tmp_path / "dest"
+
+    result = subprocess.run(
+        [sys.executable, str(VENDOR_PULL), str(upstream), "--include-frames"],
+        env={**os.environ, "VENDOR_DEST": str(dest)},
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    pinned = (dest / "PINNED.txt").read_text()
+    assert f"commit: {head}" in pinned

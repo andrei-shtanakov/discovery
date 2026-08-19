@@ -2,10 +2,10 @@
 
 Copies DISCOVERY-BRIEF-CONTRACT.md and gate_check.py from an upstream git
 checkout into a destination directory (default: src/discovery/contract),
-and writes a PINNED.txt manifest recording the upstream HEAD commit and the
-sha256 of each copied file.
+and writes a PINNED.txt manifest recording the upstream remote URL, the HEAD
+commit, and the sha256 of each copied file.
 
-Usage: uv run tools/vendor_pull.py <upstream_path>
+Usage: uv run tools/vendor_pull.py <upstream_path> [--include-frames]
 Destination override: set VENDOR_DEST to an absolute path.
 """
 
@@ -18,7 +18,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-VENDORED_FILES = ("DISCOVERY-BRIEF-CONTRACT.md", "gate_check.py")
+# Upstream-relative path -> vendored-relative path. FRAMES is the analogous
+# mapping for the question bank; it's gated behind --include-frames and left
+# empty/uninvoked in this task (out of scope, TASK-014).
+CORE = {
+    "DISCOVERY-BRIEF-CONTRACT.md": "DISCOVERY-BRIEF-CONTRACT.md",
+    "gate_check.py": "gate_check.py",
+}
+FRAMES: dict[str, str] = {}
 
 
 def default_dest() -> Path:
@@ -46,32 +53,56 @@ def upstream_head(upstream: Path) -> str:
     return result.stdout.strip()
 
 
-def vendor_pull(upstream: Path, dest: Path) -> None:
-    """Copy VENDORED_FILES from upstream to dest and write PINNED.txt."""
+def upstream_url(upstream: Path) -> str:
+    """Return the upstream's `origin` remote URL, or its path if unset."""
+    result = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=upstream,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return str(upstream)
+
+
+def vendor_pull(upstream: Path, dest: Path, *, include_frames: bool = False) -> None:
+    """Copy CORE (and FRAMES, if requested) from upstream to dest.
+
+    Writes a PINNED.txt manifest recording the upstream remote URL, the HEAD
+    commit sha, and the sha256 of each copied file.
+    """
     dest.mkdir(parents=True, exist_ok=True)
+    url = upstream_url(upstream)
     head = upstream_head(upstream)
 
+    files_to_copy = {**CORE, **FRAMES} if include_frames else CORE
     digests: list[tuple[str, str]] = []
-    for name in VENDORED_FILES:
-        src_file = upstream / name
-        dest_file = dest / name
+    for upstream_rel, dest_rel in files_to_copy.items():
+        src_file = upstream / upstream_rel
+        dest_file = dest / dest_rel
         shutil.copyfile(src_file, dest_file)
         digest = hashlib.sha256(dest_file.read_bytes()).hexdigest()
-        digests.append((name, digest))
+        digests.append((upstream_rel, digest))
 
-    lines = [f"commit: {head}", ""]
+    lines = [f"upstream: {url}", f"commit: {head}", ""]
     lines.extend(f"{name} {digest}" for name, digest in digests)
-    (dest / "PINNED.txt").write_text("\n".join(lines) + "\n")
+    (dest / "PINNED.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str]) -> int:
-    """CLI entry point: `vendor_pull.py <upstream_path>`."""
-    if len(argv) != 1:
-        print("usage: vendor_pull.py <upstream_path>", file=sys.stderr)
+    """CLI entry point: `vendor_pull.py <upstream_path> [--include-frames]`."""
+    include_frames = "--include-frames" in argv
+    positional = [arg for arg in argv if arg != "--include-frames"]
+    if len(positional) != 1:
+        print(
+            "usage: vendor_pull.py <upstream_path> [--include-frames]",
+            file=sys.stderr,
+        )
         return 2
-    upstream = Path(argv[0])
+    upstream = Path(positional[0])
     dest = resolve_dest()
-    vendor_pull(upstream, dest)
+    vendor_pull(upstream, dest, include_frames=include_frames)
     return 0
 
 
