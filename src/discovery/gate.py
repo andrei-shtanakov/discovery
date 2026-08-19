@@ -38,18 +38,16 @@ def render_and_gate(
     # Mirror `check`'s own GC-15 formula: `has_errors` there is computed from
     # every *other* rule's findings before GC-15 is appended, so a spurious
     # GC-15 mismatch against the placeholder "pending" value (never a real
-    # verdict) must not itself count as the error that produces "fail".
-    status = (
-        "fail"
-        if any(f.level == "error" for f in pass_1_findings if f.rule != "GC-15")
-        else "pass"
-    )
+    # verdict) must not itself count as the error that produces "fail", nor
+    # be embedded as a real finding in the final brief.
+    real_findings = [f for f in pass_1_findings if f.rule != "GC-15"]
+    status = "fail" if any(f.level == "error" for f in real_findings) else "pass"
 
     final_text = render_brief(
         header,
         events,
         validation=status,
-        findings=[str(f) for f in pass_1_findings],
+        findings=[str(f) for f in real_findings],
     )
     pass_2_findings = check(final_text, base_dir=base_dir)
     return GateResult(

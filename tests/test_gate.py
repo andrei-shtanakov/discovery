@@ -90,3 +90,15 @@ class TestPassingBrief:
         assert result.status == "pass"
         assert result.findings == []
         assert f"validation: {result.status}" in result.text
+
+    def test_fully_covered_brief_text_has_no_embedded_findings_comment(
+        self, tmp_path
+    ):
+        """The pass-1 GC-15 mismatch against the "pending" placeholder must
+        not survive into the final text as a stale finding (it never
+        reflects a real problem with the accepted "pass" brief)."""
+        events = [answer("customer.all.01", "product", _ALL_REQUIRED_COVERED)]
+
+        result = render_and_gate(CUSTOMER, events, tmp_path)
+
+        assert "gate findings" not in result.text
