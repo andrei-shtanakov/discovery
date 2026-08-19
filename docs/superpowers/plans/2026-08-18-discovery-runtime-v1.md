@@ -151,7 +151,9 @@ def main() -> int:
 
     commit = subprocess.run(
         ["git", "-C", str(args.upstream), "rev-parse", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
 
     wanted = list(CORE) + (FRAMES if args.include_frames else [])
@@ -211,9 +213,14 @@ TOOL = Path(__file__).resolve().parents[1] / "tools" / "vendor_pull.py"
 def make_fake_upstream(root: Path) -> str:
     """A real git repo with the two vendored files, so HEAD is a real commit."""
     root.mkdir(parents=True, exist_ok=True)
-    (root / "DISCOVERY-BRIEF-CONTRACT.md").write_text("contract bytes\n", encoding="utf-8")
+    (root / "DISCOVERY-BRIEF-CONTRACT.md").write_text(
+        "contract bytes\n", encoding="utf-8"
+    )
     (root / "gate_check.py").write_text("FRAMES = {}\n", encoding="utf-8")
-    run = lambda *a: subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True)
+
+    def run(*a: str) -> None:
+        subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True)
+
     run("init", "-q")
     run("config", "user.email", "t@example.com")
     run("config", "user.name", "t")
@@ -221,7 +228,9 @@ def make_fake_upstream(root: Path) -> str:
     run("commit", "-qm", "fixture")
     return subprocess.run(
         ["git", "-C", str(root), "rev-parse", "HEAD"],
-        check=True, capture_output=True, text=True,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
 
@@ -277,7 +286,9 @@ def test_vendored_files_match_their_recorded_digests():
     _, manifest = parse_pinned()
     for rel, digest in manifest.items():
         blob = (CONTRACT / local_name(rel)).read_bytes()
-        assert hashlib.sha256(blob).hexdigest() == digest, f"{rel} drifted from PINNED.txt"
+        assert hashlib.sha256(blob).hexdigest() == digest, (
+            f"{rel} drifted from PINNED.txt"
+        )
 
 
 def test_the_linter_is_importable_and_exposes_the_frames_table():
@@ -346,7 +357,9 @@ def test_provenance_unreachable_is_unknown_not_ok():
 
 
 def test_provenance_mismatch_fails():
-    verdict = check_vendor.verify("provenance", fetch=lambda commit, rel: b"not the file")
+    verdict = check_vendor.verify(
+        "provenance", fetch=lambda commit, rel: b"not the file"
+    )
     assert verdict.status == "failed"
 
 
@@ -439,7 +452,9 @@ def local_path(rel: str) -> Path:
 
 def github_fetch(commit: str, rel: str) -> bytes | None:
     try:
-        with urllib.request.urlopen(API.format(rel=rel, commit=commit), timeout=20) as r:
+        with urllib.request.urlopen(
+            API.format(rel=rel, commit=commit), timeout=20
+        ) as r:
             return base64.b64decode(json.load(r)["content"])
     except (urllib.error.URLError, TimeoutError, KeyError, ValueError):
         return None
@@ -454,7 +469,9 @@ def verify(mode: str, fetch: Fetcher | None = None) -> Verdict:
             if hashlib.sha256(local_path(rel).read_bytes()).hexdigest() != digest
         ]
         if drifted:
-            return Verdict("failed", f"files differ from PINNED.txt: {', '.join(drifted)}")
+            return Verdict(
+                "failed", f"files differ from PINNED.txt: {', '.join(drifted)}"
+            )
         return Verdict("ok", f"{len(manifest)} files match their recorded digests")
 
     fetch = fetch or github_fetch
@@ -466,11 +483,15 @@ def verify(mode: str, fetch: Fetcher | None = None) -> Verdict:
         if blob != local_path(rel).read_bytes():
             mismatched.append(rel)
     if mismatched:
-        return Verdict("failed", f"differ from upstream@{commit[:8]}: {', '.join(mismatched)}")
+        return Verdict(
+            "failed", f"differ from upstream@{commit[:8]}: {', '.join(mismatched)}"
+        )
     return Verdict("ok", f"bytes identical to upstream@{commit[:8]}")
 
 
-def drift(last_success: str | None, max_age_days: int = 8, now: str | None = None) -> Verdict:
+def drift(
+    last_success: str | None, max_age_days: int = 8, now: str | None = None
+) -> Verdict:
     """Has upstream moved past the pin — and is the watch itself still alive?
 
     `last_success` is the ISO timestamp of the previous successful run of this
@@ -479,7 +500,9 @@ def drift(last_success: str | None, max_age_days: int = 8, now: str | None = Non
     is the defect it exists to prevent.
     """
     if last_success is None:
-        return Verdict("unknown", "freshness unverifiable: no previous successful run reported")
+        return Verdict(
+            "unknown", "freshness unverifiable: no previous successful run reported"
+        )
     moment = dt.datetime.fromisoformat(now) if now else dt.datetime.now(dt.UTC)
     try:
         age = moment - dt.datetime.fromisoformat(last_success)
@@ -488,13 +511,24 @@ def drift(last_success: str | None, max_age_days: int = 8, now: str | None = Non
         # a silently wrong age is worse than an honest unknown.
         return Verdict("unknown", f"unusable last_success: {last_success!r}")
     if age > dt.timedelta(days=max_age_days):
-        return Verdict("unknown", f"watch stale: last success {age.days}d ago (limit {max_age_days}d)")
+        return Verdict(
+            "unknown",
+            f"watch stale: last success {age.days}d ago (limit {max_age_days}d)",
+        )
 
     commit, _ = read_pinned()
     try:
         head = subprocess.run(
-            ["git", "ls-remote", "git@github.com:andrei-shtanakov/discovery-toolkit.git", "HEAD"],
-            capture_output=True, text=True, timeout=30, check=True,
+            [
+                "git",
+                "ls-remote",
+                "git@github.com:andrei-shtanakov/discovery-toolkit.git",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
         ).stdout.split()[0]
     except (subprocess.SubprocessError, IndexError):
         return Verdict("unknown", "upstream HEAD unreadable")
@@ -511,9 +545,7 @@ def main() -> int:
         help="ISO timestamp of this watch's previous successful run (drift mode)",
     )
     args = ap.parse_args()
-    verdict = (
-        drift(args.last_success) if args.mode == "drift" else verify(args.mode)
-    )
+    verdict = drift(args.last_success) if args.mode == "drift" else verify(args.mode)
     print(f"{args.mode}: {verdict.status} — {verdict.detail}")
     return {"ok": 0, "failed": 1, "unknown": 3}[verdict.status]
 
@@ -650,7 +682,9 @@ def canonical_answer_bytes(text: str) -> bytes:
     return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
 
 
-def answer_id(session_id: str, question_id: str, participant_role: str, text: str) -> str:
+def answer_id(
+    session_id: str, question_id: str, participant_role: str, text: str
+) -> str:
     """Identity of an answer: session, question, role, canonical bytes — NUL-separated."""
     digest = hashlib.sha256(
         _SEP.join(
@@ -1033,10 +1067,7 @@ from discovery.payload import PayloadInvalid, parse_payload
 
 def test_text_and_entries_are_both_kept():
     payload = parse_payload(
-        "text: we lose orders\n"
-        "entries:\n"
-        "  - id: G-01\n"
-        "    body: cut order loss\n"
+        "text: we lose orders\nentries:\n  - id: G-01\n    body: cut order loss\n"
     )
     assert payload.text == "we lose orders"
     assert payload.entries[0].eid == "G-01"
@@ -1425,9 +1456,7 @@ def next_question(
     return None
 
 
-def compute_lifecycle(
-    events: list[dict], source: QuestionSource, frame: str
-) -> str:
+def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) -> str:
     return AWAITING_INPUT if next_question(events, source, frame) else COMPLETE
 ```
 
@@ -1505,7 +1534,11 @@ def frontmatter(text: str) -> dict:
 
 
 def test_frontmatter_carries_the_contract_core():
-    doc = frontmatter(render_brief(HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"))
+    doc = frontmatter(
+        render_brief(
+            HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"
+        )
+    )
     assert doc["schema"] == "discovery-brief"
     assert doc["schema_version"] == 1
     assert doc["spec_stage"] == "discovery"
@@ -1519,7 +1552,9 @@ def test_validation_is_written_as_given_not_predicted():
 
 
 def test_entries_reach_the_body_with_their_fields():
-    text = render_brief(HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending")
+    text = render_brief(
+        HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"
+    )
     assert "- **FR-01** retry a timed-out call" in text
     assert "Priority: Must" in text
     assert "Acceptance: retried twice" in text
@@ -1527,21 +1562,35 @@ def test_entries_reach_the_body_with_their_fields():
 
 
 def test_coverage_reports_missing_for_keys_without_entries():
-    doc = frontmatter(render_brief(HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"))
+    doc = frontmatter(
+        render_brief(
+            HEADER, [answer("customer.goals.01", "product", PAYLOAD)], "pending"
+        )
+    )
     assert doc["coverage"]["goals"] == "covered"
     assert doc["coverage"]["personas"] == "missing"
 
 
 def test_superseded_answers_do_not_reach_the_body():
-    old = answer("customer.goals.01", "product", "text: old\nentries:\n  - id: G-01\n    body: stale goal\n")
-    new = answer("customer.goals.01", "product", "text: new\nentries:\n  - id: G-01\n    body: current goal\n")
+    old = answer(
+        "customer.goals.01",
+        "product",
+        "text: old\nentries:\n  - id: G-01\n    body: stale goal\n",
+    )
+    new = answer(
+        "customer.goals.01",
+        "product",
+        "text: new\nentries:\n  - id: G-01\n    body: current goal\n",
+    )
     text = render_brief(HEADER, [old, new], "pending")
     assert "current goal" in text and "stale goal" not in text
 
 
 def test_render_is_a_pure_function_of_its_inputs():
     events = [answer("customer.goals.01", "product", PAYLOAD)]
-    assert render_brief(HEADER, events, "pending") == render_brief(HEADER, events, "pending")
+    assert render_brief(HEADER, events, "pending") == render_brief(
+        HEADER, events, "pending"
+    )
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1570,10 +1619,20 @@ from discovery.payload import Entry, parse_payload
 from discovery.session import SessionHeader
 
 SECTION_TITLES = {
-    "G": "Goals", "P": "Personas", "J": "Jobs", "FR": "Functional requirements",
-    "NFR": "Non-functional requirements", "CON": "Constraints", "M": "Success metrics",
-    "OUT": "Out of scope", "RK": "Risks", "S": "Systems", "IF": "Interfaces",
-    "AP": "Architecture preferences", "Q": "Open questions", "X": "Conflicts",
+    "G": "Goals",
+    "P": "Personas",
+    "J": "Jobs",
+    "FR": "Functional requirements",
+    "NFR": "Non-functional requirements",
+    "CON": "Constraints",
+    "M": "Success metrics",
+    "OUT": "Out of scope",
+    "RK": "Risks",
+    "S": "Systems",
+    "IF": "Interfaces",
+    "AP": "Architecture preferences",
+    "Q": "Open questions",
+    "X": "Conflicts",
 }
 
 
@@ -1632,9 +1691,7 @@ def render_brief(
     }
     coverage = _coverage(header.frame, entries)
     required = FRAMES[header.frame]["required"]
-    traced = {
-        e.fields.get("traces", "") for e in entries if _prefix(e.eid) == "FR"
-    }
+    traced = {e.fields.get("traces", "") for e in entries if _prefix(e.eid) == "FR"}
     known = {e.eid for e in entries}
     gate_passed = (
         all(coverage[key] == "covered" for key, prefix in required.items() if prefix)
@@ -1674,7 +1731,11 @@ def render_brief(
                 body.append(f"  - {key}: {value}")
 
     front = yaml.safe_dump(meta, sort_keys=True, allow_unicode=True).rstrip()
-    return f"---\n{front}\n---\n\n# Discovery brief — {header.target}\n" + "\n".join(body) + "\n"
+    return (
+        f"---\n{front}\n---\n\n# Discovery brief — {header.target}\n"
+        + "\n".join(body)
+        + "\n"
+    )
 ```
 
 - [ ] **Step 4: Run to verify it passes**
@@ -1712,15 +1773,22 @@ from discovery.journal import ANSWER_RECORDED
 from discovery.session import SessionHeader
 
 HEADER = SessionHeader(
-    session_id="s-001", frame="customer", target="t", traces_to=[],
-    source_pin="pin-1", created_at="2026-08-18T10:00:00Z",
+    session_id="s-001",
+    frame="customer",
+    target="t",
+    traces_to=[],
+    source_pin="pin-1",
+    created_at="2026-08-18T10:00:00Z",
 )
 
 
 def answer(payload: str, qid: str = "customer.goals.01") -> dict:
     return {
-        "event": ANSWER_RECORDED, "question_id": qid, "answer_id": "sha256:x",
-        "participant_role": "product", "payload": payload,
+        "event": ANSWER_RECORDED,
+        "question_id": qid,
+        "answer_id": "sha256:x",
+        "participant_role": "product",
+        "payload": payload,
     }
 
 
@@ -1917,7 +1985,9 @@ def ok(
     next_action: dict | None = None,
     findings: list[str] | None = None,
 ) -> Envelope:
-    return Envelope(lifecycle, gate, next_action or {}, findings or [], {"status": "ok"})
+    return Envelope(
+        lifecycle, gate, next_action or {}, findings or [], {"status": "ok"}
+    )
 
 
 def refused(
@@ -1995,12 +2065,7 @@ CATALOGUE = {
     ]
 }
 
-PAYLOAD = (
-    "text: we lose orders\n"
-    "entries:\n"
-    "  - id: G-01\n"
-    "    body: cut order loss\n"
-)
+PAYLOAD = "text: we lose orders\nentries:\n  - id: G-01\n    body: cut order loss\n"
 
 
 @pytest.fixture(autouse=True)
@@ -2032,34 +2097,92 @@ def test_status_in_a_fresh_process_resumes_the_same_question(capsys, home):
     assert doc["next_action"]["question_id"] == "customer.goals.01"
 
 
-def test_answer_without_a_target_question_is_refused_with_exit_2(capsys, home, tmp_path):
+def test_answer_without_a_target_question_is_refused_with_exit_2(
+    capsys, home, tmp_path
+):
     _, started = run(["start", "--frame", "customer", "--target", "org/repo"], capsys)
     sid = started["next_action"]["session_id"]
     payload = tmp_path / "a.yaml"
     payload.write_text(PAYLOAD, encoding="utf-8")
-    run(["answer", "--session", sid, "--role", "product", "--file", str(payload)], capsys)
-    run(["answer", "--session", sid, "--question", "customer.jobs.01",
-         "--role", "product", "--file", str(payload)], capsys)
-    code, doc = run(["answer", "--session", sid, "--question", "customer.jobs.01",
-                     "--role", "product", "--file", str(payload)], capsys)
+    run(
+        ["answer", "--session", sid, "--role", "product", "--file", str(payload)],
+        capsys,
+    )
+    run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.jobs.01",
+            "--role",
+            "product",
+            "--file",
+            str(payload),
+        ],
+        capsys,
+    )
+    code, doc = run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.jobs.01",
+            "--role",
+            "product",
+            "--file",
+            str(payload),
+        ],
+        capsys,
+    )
     assert code == 0 or code == 10, "an identical replay is a no-op, not a refusal"
     assert doc["operation"]["status"] == "ok"
 
 
-def test_a_conflicting_answer_is_refused_and_supersede_accepts_it(capsys, home, tmp_path):
+def test_a_conflicting_answer_is_refused_and_supersede_accepts_it(
+    capsys, home, tmp_path
+):
     _, started = run(["start", "--frame", "customer", "--target", "org/repo"], capsys)
     sid = started["next_action"]["session_id"]
     first, second = tmp_path / "1.yaml", tmp_path / "2.yaml"
     first.write_text(PAYLOAD, encoding="utf-8")
-    second.write_text(PAYLOAD.replace("cut order loss", "different goal"), encoding="utf-8")
+    second.write_text(
+        PAYLOAD.replace("cut order loss", "different goal"), encoding="utf-8"
+    )
     run(["answer", "--session", sid, "--role", "product", "--file", str(first)], capsys)
-    code, doc = run(["answer", "--session", sid, "--question", "customer.goals.01",
-                     "--role", "product", "--file", str(second)], capsys)
+    code, doc = run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.goals.01",
+            "--role",
+            "product",
+            "--file",
+            str(second),
+        ],
+        capsys,
+    )
     assert code == 2
     assert doc["operation"] == {"status": "refused", "reason": "answer_conflict"}
     assert doc["lifecycle"] == "awaiting_input", "a refusal keeps the axes populated"
-    code, _ = run(["answer", "--session", sid, "--question", "customer.goals.01",
-                   "--role", "product", "--file", str(second), "--supersede"], capsys)
+    code, _ = run(
+        [
+            "answer",
+            "--session",
+            sid,
+            "--question",
+            "customer.goals.01",
+            "--role",
+            "product",
+            "--file",
+            str(second),
+            "--supersede",
+        ],
+        capsys,
+    )
     assert code == 20
 
 
@@ -2119,7 +2242,9 @@ from discovery.session import Session, SessionHeader, SessionUnreadable
 
 
 def sessions_root() -> Path:
-    return Path(os.environ.get("DISCOVERY_HOME", Path.home() / ".discovery")) / "sessions"
+    return (
+        Path(os.environ.get("DISCOVERY_HOME", Path.home() / ".discovery")) / "sessions"
+    )
 
 
 def build_source() -> QuestionSource:
@@ -2132,7 +2257,11 @@ def _issue_if_needed(session: Session, source: QuestionSource) -> dict:
     events = session.journal.events()
     if session.header.source_pin != source.pin:
         session.journal.append(
-            {"event": SOURCE_PIN_CHANGED, "from": session.header.source_pin, "to": source.pin}
+            {
+                "event": SOURCE_PIN_CHANGED,
+                "from": session.header.source_pin,
+                "to": source.pin,
+            }
         )
     question = next_question(events, source, session.header.frame)
     if question is None:
@@ -2176,9 +2305,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         target=args.target,
         traces_to=list(args.traces_to or []),
         source_pin=source.pin,
-        created_at=__import__("datetime").datetime.now(
-            __import__("datetime").UTC
-        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        created_at=__import__("datetime")
+        .datetime.now(__import__("datetime").UTC)
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     session = Session.create(sessions_root(), header)
     return _emit(_envelope(session, source))
@@ -2205,14 +2334,19 @@ def cmd_answer(args: argparse.Namespace) -> int:
         envelope = _envelope(session, source)
         return _emit(
             protocol.refused(
-                protocol.NO_TARGET_QUESTION, envelope.lifecycle, envelope.gate,
-                envelope.next_action, envelope.findings,
+                protocol.NO_TARGET_QUESTION,
+                envelope.lifecycle,
+                envelope.gate,
+                envelope.next_action,
+                envelope.findings,
             )
         )
 
     new_id = answer_id(session.header.session_id, target, args.role, raw)
     existing = [
-        e for e in events if e.get("event") == ANSWER_RECORDED and e["question_id"] == target
+        e
+        for e in events
+        if e.get("event") == ANSWER_RECORDED and e["question_id"] == target
     ]
     if existing:
         if existing[-1]["answer_id"] == new_id:
@@ -2221,20 +2355,28 @@ def cmd_answer(args: argparse.Namespace) -> int:
             envelope = _envelope(session, source)
             return _emit(
                 protocol.refused(
-                    protocol.ANSWER_CONFLICT, envelope.lifecycle, envelope.gate,
-                    envelope.next_action, envelope.findings,
+                    protocol.ANSWER_CONFLICT,
+                    envelope.lifecycle,
+                    envelope.gate,
+                    envelope.next_action,
+                    envelope.findings,
                 )
             )
         session.journal.append(
             {
-                "event": ANSWER_SUPERSEDED, "question_id": target,
-                "from": existing[-1]["answer_id"], "to": new_id,
+                "event": ANSWER_SUPERSEDED,
+                "question_id": target,
+                "from": existing[-1]["answer_id"],
+                "to": new_id,
             }
         )
     session.journal.append(
         {
-            "event": ANSWER_RECORDED, "question_id": target, "answer_id": new_id,
-            "participant_role": args.role, "payload": raw,
+            "event": ANSWER_RECORDED,
+            "question_id": target,
+            "answer_id": new_id,
+            "participant_role": args.role,
+            "payload": raw,
         }
     )
     return _emit(_envelope(session, source))
@@ -2247,7 +2389,9 @@ def cmd_brief(args: argparse.Namespace) -> int:
     result = render_and_gate(session.header, events, session.directory)
     session.write_artifact(Path(args.out), result.text)
     lifecycle = compute_lifecycle(events, source, session.header.frame)
-    next_action = {} if lifecycle != AWAITING_INPUT else _issue_if_needed(session, source)
+    next_action = (
+        {} if lifecycle != AWAITING_INPUT else _issue_if_needed(session, source)
+    )
     return _emit(protocol.ok(lifecycle, result.status, next_action, result.findings))
 
 
@@ -2342,7 +2486,15 @@ from discovery import cli
 from discovery.questions import Question, StaticQuestionSource
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "discovery"
-FORBIDDEN_MODULES = {"socket", "http", "urllib", "requests", "httpx", "subprocess", "asyncio"}
+FORBIDDEN_MODULES = {
+    "socket",
+    "http",
+    "urllib",
+    "requests",
+    "httpx",
+    "subprocess",
+    "asyncio",
+}
 
 CATALOGUE = {"customer": [Question("customer.goals.01", "goals", "What problem?")]}
 PAYLOAD = "text: t\nentries:\n  - id: G-01\n    body: cut order loss\n"
@@ -2351,7 +2503,9 @@ PAYLOAD = "text: t\nentries:\n  - id: G-01\n    body: cut order loss\n"
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("DISCOVERY_HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(cli, "build_source", lambda: StaticQuestionSource("pin-1", CATALOGUE))
+    monkeypatch.setattr(
+        cli, "build_source", lambda: StaticQuestionSource("pin-1", CATALOGUE)
+    )
 
 
 def core_modules() -> list[Path]:
@@ -2368,7 +2522,9 @@ def test_core_imports_no_network_or_process_launcher():
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module.split(".")[0]]
             offenders += [(path.name, n) for n in names if n in FORBIDDEN_MODULES]
-    assert offenders == [], f"core must not reach the network or spawn processes: {offenders}"
+    assert offenders == [], (
+        f"core must not reach the network or spawn processes: {offenders}"
+    )
 
 
 def test_a_full_run_writes_only_under_the_session_root_and_the_brief_path(
@@ -2393,11 +2549,14 @@ def test_a_full_run_writes_only_under_the_session_root_and_the_brief_path(
     created = {p for p in tmp_path.rglob("*")} - before
     root = tmp_path / "home" / "sessions"
     stray = [
-        p for p in created
+        p
+        for p in created
         if p != out and root not in p.parents and p != root and not p.is_dir()
     ]
     assert stray == [], f"wrote outside the allowed set: {stray}"
-    assert list(workdir.iterdir()) == [], "nothing may be written to the working directory"
+    assert list(workdir.iterdir()) == [], (
+        "nothing may be written to the working directory"
+    )
 
 
 def test_the_runtime_writes_no_downstream_artifact(tmp_path, capsys):
@@ -2523,7 +2682,9 @@ from pathlib import Path
 from discovery.contract.gate_check import FRAMES
 from discovery.questions import Question
 
-MARKER_RE = re.compile(r"<!--\s*coverage_key:\s*([\w.]+)\s*;\s*produces:\s*([\w,\s]*)-->")
+MARKER_RE = re.compile(
+    r"<!--\s*coverage_key:\s*([\w.]+)\s*;\s*produces:\s*([\w,\s]*)-->"
+)
 HEADING_RE = re.compile(r"^###\s+(.*)$")
 BULLET_RE = re.compile(r"^-\s+(.*)$")
 
@@ -2608,7 +2769,11 @@ class BankQuestionSource:
                 continue
             for number, text in enumerate(topic.questions, start=1):
                 out.append(
-                    Question(f"{frame}.{topic.coverage_key}.{number:02d}", topic.coverage_key, text)
+                    Question(
+                        f"{frame}.{topic.coverage_key}.{number:02d}",
+                        topic.coverage_key,
+                        text,
+                    )
                 )
         return out
 ```
@@ -2670,7 +2835,9 @@ def test_the_real_bank_serves_questions_for_both_frames():
 
 
 def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
-    code, started = drive(["start", "--frame", "customer", "--target", "org/repo"], capsys)
+    code, started = drive(
+        ["start", "--frame", "customer", "--target", "org/repo"], capsys
+    )
     assert code == 20
     sid = started["next_action"]["session_id"]
 
@@ -2690,8 +2857,17 @@ def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
             encoding="utf-8",
         )
         drive(
-            ["answer", "--session", sid, "--question", question["question_id"],
-             "--role", "product", "--file", str(payload)],
+            [
+                "answer",
+                "--session",
+                sid,
+                "--question",
+                question["question_id"],
+                "--role",
+                "product",
+                "--file",
+                str(payload),
+            ],
             capsys,
         )
 
@@ -2706,8 +2882,11 @@ def test_suspend_and_resume_reach_a_gated_brief(tmp_path, capsys):
 def _id_for(coverage_key: str, n: int) -> str:
     from discovery.contract.gate_check import FRAMES
 
-    prefix = FRAMES["customer"]["required"].get(coverage_key) or \
-        FRAMES["customer"]["optional"].get(coverage_key) or "G"
+    prefix = (
+        FRAMES["customer"]["required"].get(coverage_key)
+        or FRAMES["customer"]["optional"].get(coverage_key)
+        or "G"
+    )
     return f"{prefix}-{n:02d}"
 ```
 
