@@ -88,13 +88,19 @@ def _issue_if_needed(
 
 
 def _status_envelope(
-    journal: Journal, header: SessionHeader, source: QuestionSource
+    journal: Journal, header: SessionHeader, source: QuestionSource, session_id: str
 ) -> Envelope:
-    """`_issue_if_needed` -> `compute_lifecycle` -> `render_and_gate`, one envelope."""
+    """`_issue_if_needed` -> `compute_lifecycle` -> `render_and_gate`, one envelope.
+
+    `session_id` is the CLI-validated id (not `header.session_id`, which is
+    unvalidated content read back out of `header.json`), so the session
+    directory used for the gate's `base_dir` can never be steered by a
+    mismatched header field.
+    """
     next_action = _issue_if_needed(journal, header, source)
     events = journal.events()
     lifecycle = compute_lifecycle(events, source, header.frame)
-    result = render_and_gate(header, events, _session_dir(header.session_id))
+    result = render_and_gate(header, events, _session_dir(session_id))
     return protocol.ok(lifecycle, result.status, next_action, result.findings)
 
 
@@ -117,15 +123,17 @@ def cmd_start(args: argparse.Namespace) -> int:
     )
     session = Session.create(sessions_root(), header)
     journal = _journal(session.header.session_id)
-    return _emit(_status_envelope(journal, session.header, source))
+    return _emit(
+        _status_envelope(journal, session.header, source, session.header.session_id)
+    )
 
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Load a session, then emit its shared status envelope."""
     source = build_source()
     session = Session.load(sessions_root(), args.session)
-    journal = _journal(session.header.session_id)
-    return _emit(_status_envelope(journal, session.header, source))
+    journal = _journal(args.session)
+    return _emit(_status_envelope(journal, session.header, source, args.session))
 
 
 def _latest_answer(events: list[dict], question_id: str) -> dict | None:
@@ -139,10 +147,14 @@ def _latest_answer(events: list[dict], question_id: str) -> dict | None:
 
 
 def _refuse(
-    journal: Journal, header: SessionHeader, source: QuestionSource, reason: str
+    journal: Journal,
+    header: SessionHeader,
+    source: QuestionSource,
+    reason: str,
+    session_id: str,
 ) -> Envelope:
     """A refusal envelope built from the current, unwritten-to journal state."""
-    envelope = _status_envelope(journal, header, source)
+    envelope = _status_envelope(journal, header, source, session_id)
     return protocol.refused(
         reason,
         envelope.lifecycle,
@@ -157,7 +169,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
     source = build_source()
     session = Session.load(sessions_root(), args.session)
     header = session.header
-    journal = _journal(header.session_id)
+    journal = _journal(args.session)
     events = journal.events()
 
     target = args.question
@@ -165,7 +177,9 @@ def cmd_answer(args: argparse.Namespace) -> int:
         pending = next_question(events, source, header.frame)
         target = pending.question_id if pending is not None else None
     if target is None:
-        return _emit(_refuse(journal, header, source, protocol.NO_TARGET_QUESTION))
+        return _emit(
+            _refuse(journal, header, source, protocol.NO_TARGET_QUESTION, args.session)
+        )
 
     raw = (
         sys.stdin.read()
@@ -190,7 +204,9 @@ def cmd_answer(args: argparse.Namespace) -> int:
     elif existing.get("answer_id") == new_id:
         pass
     elif not args.supersede:
-        return _emit(_refuse(journal, header, source, protocol.ANSWER_CONFLICT))
+        return _emit(
+            _refuse(journal, header, source, protocol.ANSWER_CONFLICT, args.session)
+        )
     else:
         journal.append(
             {
@@ -209,18 +225,16 @@ def cmd_answer(args: argparse.Namespace) -> int:
             }
         )
 
-    return _emit(_status_envelope(journal, header, source))
+    return _emit(_status_envelope(journal, header, source, args.session))
 
 
 def cmd_brief(args: argparse.Namespace) -> int:
     """Render+gate into `args.out`, the one write outside the session root."""
     source = build_source()
     session = Session.load(sessions_root(), args.session)
-    journal = _journal(session.header.session_id)
+    journal = _journal(args.session)
     events = journal.events()
-    result = render_and_gate(
-        session.header, events, _session_dir(session.header.session_id)
-    )
+    result = render_and_gate(session.header, events, _session_dir(args.session))
     write_artifact(Path(args.out), result.text)
     lifecycle = compute_lifecycle(events, source, session.header.frame)
     next_action = (
@@ -268,7 +282,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (SessionUnreadable, JournalUnreadable, PayloadInvalid, OSError) as exc:
+    except (
+        SessionUnreadable,
+        JournalUnreadable,
+        PayloadInvalid,
+        OSError,
+        UnicodeDecodeError,
+    ) as exc:
         return _emit(protocol.unknown(str(exc)))
 
 

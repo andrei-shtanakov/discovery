@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from discovery import cli
 from discovery.questions import Question, StaticQuestionSource
 
@@ -389,3 +391,210 @@ class TestBrief:
         assert out_path.exists()
         assert envelope["lifecycle"] == "complete"
         assert code == 10
+
+
+class TestSessionIdentitySpoofing:
+    """A mismatched header.json `session_id` field must not steer file I/O.
+
+    `Session.load` validates the CLI-supplied `--session` value but returns
+    whatever `session_id` the header content claims. Path helpers must key
+    off the validated CLI argument, never the header field, or a corrupted
+    (or tampered) header could redirect journal/artifact I/O elsewhere.
+    """
+
+    def test_status_uses_the_validated_session_id_not_the_header_field(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        header_path = cli._session_dir(session_id) / "header.json"
+        header = json.loads(header_path.read_text())
+        header["session_id"] = "spoofed-other-session"
+        header_path.write_text(json.dumps(header))
+
+        _run(capsys, ["status", "--session", session_id])
+
+        assert not (cli.sessions_root() / "spoofed-other-session").exists()
+        events = cli._journal(session_id).events()
+        assert any(e["event"] == "question_asked" for e in events)
+
+
+class TestMainExceptionHandling:
+    """main() collapses OSError/PayloadInvalid/JournalUnreadable/UnicodeDecodeError
+    to the `unknown` envelope, never a raw traceback."""
+
+    def test_answer_with_a_missing_file_is_exit_1_via_oserror(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+
+        code, envelope = _run(
+            capsys,
+            [
+                "answer",
+                "--session",
+                session_id,
+                "--role",
+                "customer",
+                "--file",
+                str(tmp_path / "does-not-exist.yaml"),
+            ],
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+
+    def test_answer_with_non_utf8_file_is_exit_1_via_unicode_decode_error(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        answer_path = tmp_path / "bad.yaml"
+        answer_path.write_bytes(b"text: \xff\xfe not valid utf-8\n")
+
+        code, envelope = _run(
+            capsys,
+            [
+                "answer",
+                "--session",
+                session_id,
+                "--role",
+                "customer",
+                "--file",
+                str(answer_path),
+            ],
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+
+    def test_answer_with_malformed_payload_is_exit_1_via_payload_invalid(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        answer_path = tmp_path / "a.yaml"
+        answer_path.write_text("no_text_field: true\n")
+
+        code, envelope = _run(
+            capsys,
+            [
+                "answer",
+                "--session",
+                session_id,
+                "--role",
+                "customer",
+                "--file",
+                str(answer_path),
+            ],
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+
+    def test_status_of_a_journal_with_a_corrupt_line_is_exit_1(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        journal_path = cli._session_dir(session_id) / "journal.jsonl"
+        with journal_path.open("a") as fh:
+            fh.write("not json\n")
+
+        code, envelope = _run(capsys, ["status", "--session", session_id])
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+
+
+class TestTracesTo:
+    """--traces-to is persisted onto the session header, not dropped."""
+
+    def test_traces_to_is_persisted_onto_the_session_header(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        monkeypatch.setenv("DISCOVERY_HOME", str(tmp_path / "home"))
+        _use_source(monkeypatch, ONE_QUESTION)
+
+        _, envelope = _run(
+            capsys,
+            [
+                "start",
+                "--frame",
+                "customer",
+                "--target",
+                "org/repo",
+                "--traces-to",
+                "BR-01",
+                "--traces-to",
+                "BR-02",
+            ],
+        )
+        session_id = envelope["next_action"]["session_id"]
+        header = json.loads((cli._session_dir(session_id) / "header.json").read_text())
+
+        assert header["traces_to"] == ["BR-01", "BR-02"]
+
+
+class TestNextActionFields:
+    """next_action carries the question's text and coverage_key, not just its id."""
+
+    def test_next_action_includes_question_text_and_coverage_key(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        _, _, envelope = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+
+        assert envelope["next_action"]["coverage_key"] == "goals"
+        assert envelope["next_action"]["question_text"] == "What problem?"
+
+
+class TestExplicitQuestionOverride:
+    """--question lets an operator target a question other than the pending one."""
+
+    def test_answer_can_target_a_non_pending_question_via_explicit_flag(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        catalogue = {
+            "customer": [
+                Question("customer.g.01", "goals", "What problem?"),
+                Question("customer.j.01", "jobs", "Recent case?"),
+            ]
+        }
+        session_id, _, started = _start(capsys, monkeypatch, tmp_path, catalogue)
+        assert started["next_action"]["question_id"] == "customer.g.01"
+
+        answer_path = tmp_path / "a.yaml"
+        answer_path.write_text(_payload("answering out of order"))
+        code, envelope = _run(
+            capsys,
+            [
+                "answer",
+                "--session",
+                session_id,
+                "--question",
+                "customer.j.01",
+                "--role",
+                "customer",
+                "--file",
+                str(answer_path),
+            ],
+        )
+
+        events = cli._journal(session_id).events()
+        recorded = [
+            e
+            for e in events
+            if e["event"] == "answer_recorded" and e["question_id"] == "customer.j.01"
+        ]
+        assert len(recorded) == 1
+        assert envelope["operation"] == {"status": "ok"}
+
+
+class TestArgumentValidation:
+    """argparse rejects missing/invalid arguments before any command runs."""
+
+    def test_start_without_required_target_exits_nonzero(self):
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["start", "--frame", "customer"])
+        assert exc_info.value.code == 2
+
+    def test_start_rejects_an_unknown_frame_value(self):
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["start", "--frame", "nope", "--target", "org/repo"])
+        assert exc_info.value.code == 2
