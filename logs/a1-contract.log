@@ -1,0 +1,9 @@
+07:23:47 [info     ] validation_complete            errors=2 file=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/discovery-maestro-ws/a1-contract/spec/maestro-tasks.md module=validate run_id=9d111288 warnings=2
+07:23:47 [error    ] Validation failed before execution module=cli run_id=9d111288
+  x TASK-001: meta line not recognized — expected `🔴 P0 | ⬜ TODO | Est: 1d` (priority, then status, one of TODO, IN_PROGRESS, REVIEW, DONE, BLOCKED); priority/status are defaults, not what the spec says
+  x TASK-002: meta line not recognized — expected `🔴 P0 | ⬜ TODO | Est: 1d` (priority, then status, one of TODO, IN_PROGRESS, REVIEW, DONE, BLOCKED); priority/status are defaults, not what the spec says
+
+  ! TASK-001: missing estimate
+  ! TASK-002: missing estimate
+
+2 errors, 2 warnings
