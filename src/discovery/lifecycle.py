@@ -4,7 +4,8 @@ Lifecycle is a pure function of the raw journal event list, never separate
 storage: `issued`/`answered_ids` fold the journal, `next_question` restores an
 already-issued question entirely from its own `question_asked` event (never
 by re-resolving its id against the current `QuestionSource`), and
-`compute_lifecycle` is a one-line projection of `next_question`.
+`compute_lifecycle` projects `next_question`, plus the §5 emptiness
+precondition (an empty source is `unknown`, not `complete`).
 """
 
 from __future__ import annotations
