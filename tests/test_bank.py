@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from discovery.bank import BankInvalid, BankQuestionSource, Topic, _validate
+from discovery.bank import (
+    BankInvalid,
+    BankQuestionSource,
+    Topic,
+    _validate,
+    parse_frame,
+)
 from discovery.contract import gate_check
 
 SYNTHETIC_CUSTOMER_FRAME = """# Frame: synthetic customer fixture
@@ -78,11 +84,56 @@ def test_bank_question_source_id_format_and_none_topic_excluded(tmp_path):
     questions = source.questions("customer")
 
     ids = [q.question_id for q in questions]
-    assert ids[0] == "customer.goals.01"
-    assert ids[1] == "customer.goals.02"
-    assert ids[2] == "customer.personas.01"
+    assert ids == [
+        "customer.goals.01",
+        "customer.goals.02",
+        "customer.personas.01",
+        "customer.jobs.01",
+        "customer.functions.01",
+        "customer.nfr.01",
+        "customer.constraints.01",
+        "customer.success_metrics.01",
+        "customer.out_of_scope.01",
+    ]
     assert all(not qid.startswith("customer.none") for qid in ids)
     assert "Anything else we should ask?" not in [q.text for q in questions]
+
+
+def test_validate_raises_on_unknown_frame():
+    with pytest.raises(BankInvalid, match="bogus"):
+        _validate("bogus", [])
+
+
+def test_validate_raises_on_duplicate_coverage_key_claim():
+    topics = _customer_topics_with() + [
+        Topic(coverage_key="goals", produces=["G"], questions=["q"])
+    ]
+
+    with pytest.raises(BankInvalid, match="goals"):
+        _validate("customer", topics)
+
+
+def test_validate_raises_on_empty_produces_for_required_key():
+    topics = _customer_topics_with(goals=[])
+
+    with pytest.raises(BankInvalid, match="goals"):
+        _validate("customer", topics)
+
+
+def test_parse_frame_marker_tolerates_space_after_comma_in_produces():
+    text = (
+        "<!-- coverage_key: none; produces: X, Q -->\n"
+        "- filler\n"
+        "### Next\n"
+        "<!-- coverage_key: goals; produces: G -->\n"
+        "- What problem are we solving?\n"
+    )
+
+    topics = parse_frame(text)
+
+    assert [t.coverage_key for t in topics] == [None, "goals"]
+    assert topics[0].produces == ["X", "Q"]
+    assert topics[1].questions == ["What problem are we solving?"]
 
 
 def test_bank_question_source_raises_before_returning_partial_list(tmp_path):

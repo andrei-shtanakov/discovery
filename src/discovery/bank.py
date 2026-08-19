@@ -15,7 +15,7 @@ from pathlib import Path
 from discovery.contract import gate_check
 from discovery.questions import Question
 
-MARKER_RE = re.compile(r"<!--\s*coverage_key:\s*(\S+);\s*produces:\s*([\w,]*)\s*-->")
+MARKER_RE = re.compile(r"<!--\s*coverage_key:\s*(\S+);\s*produces:\s*([\w,\s]*)\s*-->")
 _HEADING_RE = re.compile(r"^#{1,6}\s")
 
 
@@ -63,7 +63,11 @@ def parse_frame(text: str) -> list[Topic]:
             close_topic()
             key = marker.group(1)
             coverage_key = None if key == "none" else key
-            produces = marker.group(2).split(",") if marker.group(2) else []
+            produces = (
+                [p.strip() for p in marker.group(2).split(",") if p.strip()]
+                if marker.group(2).strip()
+                else []
+            )
             questions = []
             open_topic = True
             continue
@@ -91,8 +95,16 @@ def _validate(frame: str, topics: list[Topic]) -> None:
     `produces` prefix to compare against, so the prefix check is skipped for
     it once the key itself has been claimed by some topic.
     """
+    if frame not in gate_check.FRAMES:
+        raise BankInvalid(f"unknown frame {frame!r}")
     coverage = gate_check.FRAMES[frame]
-    claimed = {t.coverage_key for t in topics if t.coverage_key is not None}
+    claimed_keys = [t.coverage_key for t in topics if t.coverage_key is not None]
+    duplicates = {k for k in claimed_keys if claimed_keys.count(k) > 1}
+    if duplicates:
+        raise BankInvalid(
+            f"frame {frame!r} has duplicate coverage_key claim(s): {sorted(duplicates)}"
+        )
+    claimed = set(claimed_keys)
     missing = set(coverage["required"]) - claimed
     if missing:
         raise BankInvalid(
@@ -106,6 +118,11 @@ def _validate(frame: str, topics: list[Topic]) -> None:
         ].get(topic.coverage_key)
         if expected_prefix is None:
             continue
+        if not topic.produces:
+            raise BankInvalid(
+                f"topic {topic.coverage_key!r} in frame {frame!r} "
+                "declares no produces prefix"
+            )
         for produced in topic.produces:
             if not produced.startswith(expected_prefix):
                 raise BankInvalid(
