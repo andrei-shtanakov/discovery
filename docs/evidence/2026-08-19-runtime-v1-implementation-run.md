@@ -66,7 +66,48 @@ scope-гейт и фиксирует история `ws/*` вместе с ди�
 и быстрый выход оставляет пустой `logs/<ULID>/spec-runner-<pid>.jsonl` —
 диагноз возможен только ручным воспроизведением `run --all --dry-run`.
 
-### Попытка 2 — с доворочеными описаниями
+### Попытка 2 (08:12–08:26) — формат исправлен, всплыли две другие причины
+
+Мета-строка сгенерировалась канонически (`🔴 P0 | ⬜ TODO | Est: 2h`) — рычаг
+через описание работает, spec-runner принял файл и взял TASK-001 в работу.
+Но воркстрим упал дважды, и обе причины другие.
+
+**Причина A — претензия на red по уже существующему файлу.** Настоящее
+сообщение исполнителя (в логах прогона его нет, добыто ручным
+воспроизведением `spec-runner run --all --spec-prefix maestro-`):
+
+```
+⛔ RED not confirmed, refusing to implement: no confirmed red for this task in
+this workstream — the red was written into tests/test_task_001_red.py, which
+already existed before this task started. A claim freezes the whole file, so
+the implementation could not add to it afterwards
+```
+
+Файл остался от попытки 1: ветка `task/task-001` **пережила удаление
+worktree**, потому что ветки живут в репо, а не в рабочей копии. Снос
+`ws/a1-contract` их не трогает. Урок для чистки после неудачного воркстрима:
+удалять и `task/*`-ветки, иначе следующая попытка получает HOOK_FAILURE без
+ретрая.
+
+**Причина B — в репо не было `.gitignore`.** Red-коммит `0c50e58` содержит
+`__pycache__/test_task_001_red.cpython-313-pytest-9.1.1.pyc` и `uv.lock`, но не
+исходник теста. `.pyc` попадает в коммит и участвует в претензии на red.
+Заведён `.gitignore` (`__pycache__/`, `logs/`, `spec/.executor-*`, кеши).
+
+**Причина C — моя инструкция протекла в требования.** Формат мета-строки,
+вписанный в описание воркстрима, генератор превратил в `[REQ-012] Any
+downstream-generated spec/maestro-tasks.md uses the mandatory meta-line
+format… Traces to TASK-001, TASK-002` — то есть в требование к
+разрабатываемому рантайму, который `tasks.md` не пишет вообще (граница
+author ≠ execute). Инструкция переоформлена как явная мета-инструкция
+генератору с запретом заводить её как REQ/NFR/TASK.
+
+Отдельная находка о наблюдаемости: причина A **не видна из прогона** —
+`logs/<ULID>/spec-runner-<pid>.jsonl` пуст, таблицы `attempts`/`agent_calls`
+состояния исполнителя пусты, в БД maestro только «spec-runner exited with
+code 1». Диагноз потребовал ручного воспроизведения в worktree.
+
+### Попытка 3 — три причины устранены
 
 Запущена с изолированной БД `~/.maestro/discovery.db`: первая попытка шла в
 общую `~/.maestro/maestro.db` и очистила 7 воркстримов от чужого прогона от

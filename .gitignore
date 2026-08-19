@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Инструменты прогона: spec-runner пишет логи и состояние в рабочее дерево.
+# Без этого .pyc попадает в red-коммит TDD, а претензия на red считается по
+# замороженному файлу — наблюдалось 2026-08-19, см. docs/evidence/.
+logs/
+spec/.executor-*
+.pytest_cache/
+.ruff_cache/
