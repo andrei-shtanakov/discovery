@@ -162,3 +162,123 @@ class TestBodyRendering:
         assert "## Goals" in text
         assert "## Personas" in text
         assert text.index("## Goals") < text.index("## Personas")
+
+
+_ALL_REQUIRED_COVERED = (
+    "entries:\n"
+    "  - id: G-01\n"
+    "    body: a goal\n"
+    "  - id: P-01\n"
+    "    body: a persona\n"
+    "  - id: J-01\n"
+    "    body: a job\n"
+    "  - id: FR-01\n"
+    "    body: a function\n"
+    "    traces: [G-01]\n"
+    "  - id: NFR-01\n"
+    "    body: a non-functional requirement\n"
+    "  - id: CON-01\n"
+    "    body: a constraint\n"
+    "  - id: M-01\n"
+    "    body: a success metric\n"
+    "  - id: OUT-01\n"
+    "    body: an out-of-scope item\n"
+)
+
+
+class TestGatePassed:
+    def test_true_when_all_required_covered_fr_traced_and_no_blocking_questions(self):
+        events = [answer("customer.all.01", "product", _ALL_REQUIRED_COVERED)]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["coverage"]["gate_passed"] is True
+
+    def test_false_when_a_required_key_has_no_covering_entry(self):
+        payload = _ALL_REQUIRED_COVERED.replace(
+            "  - id: OUT-01\n    body: an out-of-scope item\n", ""
+        )
+        events = [answer("customer.all.01", "product", payload)]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["coverage"]["out_of_scope"] == "missing"
+        assert meta["coverage"]["gate_passed"] is False
+
+    def test_false_when_an_fr_entry_has_no_traces(self):
+        payload = _ALL_REQUIRED_COVERED.replace(
+            "  - id: FR-01\n    body: a function\n    traces: [G-01]\n",
+            "  - id: FR-01\n    body: a function\n",
+        )
+        events = [answer("customer.all.01", "product", payload)]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["coverage"]["gate_passed"] is False
+
+    def test_false_when_an_fr_entry_traces_to_a_nonexistent_id(self):
+        payload = _ALL_REQUIRED_COVERED.replace("traces: [G-01]", "traces: [G-99]")
+        events = [answer("customer.all.01", "product", payload)]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["coverage"]["gate_passed"] is False
+
+    def test_false_when_an_unresolved_blocking_question_exists(self):
+        payload = _ALL_REQUIRED_COVERED + (
+            "  - id: Q-01\n"
+            "    body: an open question\n"
+            "    blocking: true\n"
+            "    resolved: false\n"
+        )
+        events = [answer("customer.all.01", "product", payload)]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["coverage"]["gate_passed"] is False
+
+    def test_true_when_an_open_question_is_not_blocking(self):
+        payload = _ALL_REQUIRED_COVERED + (
+            "  - id: Q-01\n"
+            "    body: an open question\n"
+            "    blocking: false\n"
+            "    resolved: false\n"
+        )
+        events = [answer("customer.all.01", "product", payload)]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["coverage"]["gate_passed"] is True
+
+
+class TestFindingsRendering:
+    def test_findings_render_as_a_trailing_html_comment_block(self):
+        events = [
+            answer(
+                "customer.goals.01",
+                "product",
+                "entries:\n  - id: G-01\n    body: reach 10k users\n",
+            )
+        ]
+
+        text = render_brief(
+            CUSTOMER, events, "fail", findings=["GC-06 FR-01: no traces"]
+        )
+
+        assert "<!-- gate findings:" in text
+        assert "- GC-06 FR-01: no traces" in text
+        assert text.rstrip().endswith("-->")
+
+    def test_no_findings_block_when_findings_is_none_or_empty(self):
+        events = [
+            answer(
+                "customer.goals.01",
+                "product",
+                "entries:\n  - id: G-01\n    body: reach 10k users\n",
+            )
+        ]
+
+        assert "gate findings" not in render_brief(CUSTOMER, events, "pending")
+        assert "gate findings" not in render_brief(
+            CUSTOMER, events, "pending", findings=[]
+        )
