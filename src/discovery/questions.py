@@ -37,9 +37,9 @@ class StaticQuestionSource:
     """Fixed catalogue implementation of `QuestionSource`."""
 
     def __init__(self, pin: str, catalogue: dict[str, list[Question]]) -> None:
-        """Store the pin and a frame-to-questions catalogue verbatim."""
+        """Store the pin and a defensive copy of the frame-to-questions catalogue."""
         self._pin = pin
-        self._catalogue = catalogue
+        self._catalogue = {frame: list(qs) for frame, qs in catalogue.items()}
 
     @property
     def pin(self) -> str:
@@ -48,4 +48,4 @@ class StaticQuestionSource:
 
     def questions(self, frame: str) -> list[Question]:
         """Return the frame's questions in catalogue order, or `[]` if unknown."""
-        return self._catalogue.get(frame, [])
+        return list(self._catalogue.get(frame, []))
