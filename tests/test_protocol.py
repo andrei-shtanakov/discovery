@@ -32,6 +32,7 @@ class TestEnvelopeConstructors:
             findings=["GC-04: missing required topic"],
         )
         assert envelope.findings == ["GC-04: missing required topic"]
+        assert exit_code(envelope) == 2
 
     def test_unknown_defaults_next_action_and_findings_to_empty(self):
         envelope = unknown("journal unreadable")
@@ -74,9 +75,21 @@ class TestExitCodeRanks:
         envelope = refused(ANSWER_CONFLICT, "awaiting_input", "fail")
         assert exit_code(envelope) == 2
 
+    def test_rank_4_complete_fail(self):
+        envelope = Envelope(lifecycle="complete", gate="fail")
+        assert exit_code(envelope) == 10
+
     def test_rank_5_complete_pass_is_lowest(self):
         envelope = ok("complete", "pass")
         assert exit_code(envelope) == 0
+
+    def test_rank_1_unknown_operation_outranks_complete_pass(self):
+        envelope = Envelope(
+            lifecycle="complete",
+            gate="pass",
+            operation={"status": "unknown", "reason": "journal unreadable"},
+        )
+        assert exit_code(envelope) == 1
 
     def test_two_calls_over_same_envelope_agree(self):
         envelope = Envelope(lifecycle="awaiting_input", gate="fail")
