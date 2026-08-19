@@ -82,10 +82,22 @@ def test_consistency_mismatch_fails(tmp_path, monkeypatch):
     gate_py = tmp_path / "gate_check.py"
     gate_py.write_text("FRAMES = {}\n")
     gate_digest = hashlib.sha256(gate_py.read_bytes()).hexdigest()
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    customer_md = frames_dir / "customer.md"
+    customer_md.write_text("customer frame\n")
+    customer_digest = hashlib.sha256(customer_md.read_bytes()).hexdigest()
+    engineer_md = frames_dir / "engineer.md"
+    engineer_md.write_text("engineer frame\n")
+    engineer_digest = hashlib.sha256(engineer_md.read_bytes()).hexdigest()
     (tmp_path / "PINNED.txt").write_text(
         "commit: 0000000000000000000000000000000000000000\n"
         "DISCOVERY-BRIEF-CONTRACT.md deadbeef\n"
         f"gate_check.py {gate_digest}\n"
+        ".claude/skills/discovery-interview/frames/customer.md"
+        f" {customer_digest}\n"
+        ".claude/skills/discovery-interview/frames/engineer.md"
+        f" {engineer_digest}\n"
     )
     monkeypatch.setattr(check_vendor, "CONTRACT", tmp_path)
 
@@ -93,6 +105,26 @@ def test_consistency_mismatch_fails(tmp_path, monkeypatch):
 
     assert verdict.status == "failed"
     assert "DISCOVERY-BRIEF-CONTRACT.md" in verdict.detail
+
+
+def test_expected_surface_catches_a_manifest_missing_a_frame_line(
+    tmp_path, monkeypatch
+):
+    # Symmetric to test_reduced_manifest_fails_both_modes: dropping a frame
+    # line from PINNED.txt must be caught just as loudly as a CORE line.
+    (tmp_path / "PINNED.txt").write_text(
+        "commit: " + "a" * 40 + "\n"
+        "DISCOVERY-BRIEF-CONTRACT.md " + "0" * 64 + "\n"
+        "gate_check.py " + "0" * 64 + "\n"
+        ".claude/skills/discovery-interview/frames/customer.md " + "0" * 64 + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_vendor, "CONTRACT", tmp_path)
+
+    verdict = check_vendor.verify("consistency", fetch=None)
+
+    assert verdict.status == "failed"
+    assert ".claude/skills/discovery-interview/frames/engineer.md" in verdict.detail
 
 
 def test_drift_pin_behind_upstream_fails():
