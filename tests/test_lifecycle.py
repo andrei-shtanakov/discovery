@@ -11,6 +11,23 @@ from discovery.lifecycle import (
 from discovery.questions import Question, StaticQuestionSource
 
 
+class SpyQuestionSource:
+    """Records every `.questions()` call so a test can assert it never fires."""
+
+    def __init__(self, pin, catalogue):
+        self._pin = pin
+        self._catalogue = catalogue
+        self.questions_calls = []
+
+    @property
+    def pin(self):
+        return self._pin
+
+    def questions(self, frame):
+        self.questions_calls.append(frame)
+        return list(self._catalogue.get(frame, []))
+
+
 def question_asked(question_id, coverage_key, text, source_pin="pin-1"):
     return {
         "event": "question_asked",
@@ -189,6 +206,32 @@ class TestNextQuestion:
         result = next_question(events, source, "customer")
 
         assert result is None
+
+    def test_dangling_answer_for_a_still_catalogued_question_is_not_reoffered(self):
+        events = [answer_recorded("customer.goals.01")]
+        source = StaticQuestionSource(
+            pin="pin-1",
+            catalogue={
+                "customer": [Question("customer.goals.01", "goals", "What problem?")]
+            },
+        )
+
+        result = next_question(events, source, "customer")
+
+        assert result is None
+
+    def test_pending_question_never_queries_the_source(self):
+        events = [question_asked("customer.goals.01", "goals", "What problem?")]
+        source = SpyQuestionSource(
+            pin="pin-1",
+            catalogue={
+                "customer": [Question("customer.goals.01", "goals", "Different text")]
+            },
+        )
+
+        next_question(events, source, "customer")
+
+        assert source.questions_calls == []
 
 
 class TestComputeLifecycle:

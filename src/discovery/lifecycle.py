@@ -49,8 +49,9 @@ def next_question(
             )
 
     already_issued = {event["question_id"] for event in issued(events)}
+    settled = already_issued | answered
     for question in source.questions(frame):
-        if question.question_id not in already_issued:
+        if question.question_id not in settled:
             return question
 
     return None
