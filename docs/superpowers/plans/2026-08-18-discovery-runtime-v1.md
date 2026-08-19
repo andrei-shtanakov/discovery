@@ -87,42 +87,25 @@ another. `cli.py` composes and holds no rules of its own.
 - Consumes: nothing.
 - Produces: importable `discovery.contract.gate_check` exposing `check(text: str, base_dir: Path | None) -> list[Finding]`, `FRAMES: dict[str, dict]`, `Finding(rule: str, level: str, ref: str, message: str)`; `PINNED.txt` format used by Task 2's tooling.
 
-- [ ] **Step 1: Configure the package and dependencies**
+- [ ] **Step 1: Verify the baseline you were handed**
 
-```toml
-# pyproject.toml — replace the [project] block's tail and add the rest
-[project]
-name = "discovery"
-version = "0.1.0"
-description = "Runtime for discovery interviews and brief authoring"
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = ["pyyaml>=6.0"]
+`pyproject.toml`, the dev toolchain (`pytest`, `ruff`, `pyrefly`), `uv.lock`, the empty
+`tests/`, and the vendored `src/discovery/contract/` are **already on the base branch**.
+Do not re-create them: a TDD run cannot author a failing test in a repository whose test
+command does not run, so the environment is set up before the run starts, not inside it.
+(Attempt 4 died exactly here — `uv run pytest` could not spawn `pytest`; see
+`docs/evidence/2026-08-19-runtime-v1-implementation-run.md`.)
 
-[project.scripts]
-discovery = "discovery.cli:main"
+Confirm, and stop with a clear report if any of these is not true:
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+Run: `uv run pytest`
+Expected: exits cleanly, collecting nothing yet (no tests exist).
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/discovery"]
+Run: `uv run ruff check . && uv run ruff format --check .`
+Expected: `All checks passed!`
 
-[tool.ruff]
-line-length = 88
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
-
-[tool.ruff.lint.per-file-ignores]
-"src/discovery/contract/gate_check.py" = ["ALL"]  # vendored bytes, never edited
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-```
-
-Run: `uv add pyyaml && uv add --dev pytest ruff pyrefly`
+Run: `uv run python -c "from discovery.contract.gate_check import FRAMES; print(sorted(FRAMES))"`
+Expected: `['customer', 'engineer']`
 
 - [ ] **Step 2: Write the vendoring tool**
 

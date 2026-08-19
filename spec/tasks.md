@@ -18,7 +18,7 @@
 🔴 P0 | ⬜ TODO | Est: 2h
 
 **Checklist:**
-- [ ] `pyproject.toml`: пакет `src/discovery`, зависимость `pyyaml`, ruff line-length 88, `per-file-ignores = ["ALL"]` на вендоренный `gate_check.py`
+- [ ] Проверить базу (она **уже готова**, не пересоздавать): `uv run pytest` стартует, `ruff check`/`format --check` чисты, `discovery.contract.gate_check` импортируется и отдаёт оба фрейма — при расхождении остановиться с отчётом
 - [ ] `tools/vendor_pull.py` копирует контракт и линтер и пишет `PINNED.txt` (upstream, commit, `path sha256`); назначение берётся из `VENDOR_DEST`, иначе `src/discovery/contract`
 - [ ] Тест инструмента **герметичный**: поддельный upstream в `tmp_path`, никакого соседнего чекаута — внутри worktree его и нет
 - [ ] Вендоренные `DISCOVERY-BRIEF-CONTRACT.md` и `gate_check.py` **уже лежат** в `src/discovery/contract/` (пред-вендоринг на базовой ветке); задача добавляет `__init__.py` и делает их импортируемыми как `discovery.contract.gate_check`
