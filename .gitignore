@@ -9,5 +9,9 @@ __pycache__/
 # замороженному файлу — наблюдалось 2026-08-19, см. docs/evidence/.
 logs/
 spec/.executor-*
+# harness-created: spec-runner воспроизводит его перед каждой задачей, если его нет
+# в HEAD. В e7ebf54 он попал в коммит операторским `git add -A`, а не как
+# осознанный артефакт задачи — больше не подметать.
+spec/.gitignore
 .pytest_cache/
 .ruff_cache/
