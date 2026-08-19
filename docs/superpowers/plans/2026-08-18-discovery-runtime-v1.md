@@ -42,7 +42,8 @@ model in the core is excluded by the chosen approach. **Resolution: the answer p
 structured.** `answer --file` accepts a YAML document with `text` (verbatim, kept for
 provenance and the L2 tests) and `entries` (typed contract entries). Interpretation stays with
 the interviewer — human or an agent running the `discovery-interview` skill — and the runtime
-formats and gates. Spec §5/§7 to be amended with this before the design PR merges.
+formats and gates. Spec §5 carries this amendment as of the commit that added this plan; the
+plan and the spec agree, and neither is waiting on the other.
 
 ---
 
@@ -303,6 +304,23 @@ def test_provenance_mismatch_fails():
     assert verdict.status == "failed"
 
 
+def test_drift_without_a_previous_success_is_unknown():
+    assert check_vendor.drift(last_success=None).status == "unknown"
+
+
+def test_drift_with_a_stale_watch_is_unknown():
+    verdict = check_vendor.drift(
+        last_success="2026-08-01T06:17:00+00:00",
+        now="2026-08-18T06:17:00+00:00",
+    )
+    assert verdict.status == "unknown"
+    assert "stale" in verdict.detail
+
+
+def test_drift_with_an_unparseable_timestamp_is_unknown():
+    assert check_vendor.drift(last_success="last tuesday").status == "unknown"
+
+
 def test_provenance_matching_bytes_pass():
     root = Path(__file__).resolve().parents[1] / "src" / "discovery" / "contract"
 
@@ -336,6 +354,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import datetime as dt
 import hashlib
 import json
 import subprocess
@@ -405,8 +424,26 @@ def verify(mode: str, fetch: Fetcher | None = None) -> Verdict:
     return Verdict("ok", f"bytes identical to upstream@{commit[:8]}")
 
 
-def drift(max_age_days: int = 8) -> Verdict:
-    """Has upstream moved past the pin, and is the watch itself fresh?"""
+def drift(last_success: str | None, max_age_days: int = 8, now: str | None = None) -> Verdict:
+    """Has upstream moved past the pin — and is the watch itself still alive?
+
+    `last_success` is the ISO timestamp of the previous successful run of this
+    watch, passed in by the workflow. Absent or older than `max_age_days` is
+    `unknown`: a watch whose silence cannot be distinguished from a clean result
+    is the defect it exists to prevent.
+    """
+    if last_success is None:
+        return Verdict("unknown", "freshness unverifiable: no previous successful run reported")
+    moment = dt.datetime.fromisoformat(now) if now else dt.datetime.now(dt.UTC)
+    try:
+        age = moment - dt.datetime.fromisoformat(last_success)
+    except (ValueError, TypeError):
+        # TypeError catches a naive timestamp subtracted from an aware one —
+        # a silently wrong age is worse than an honest unknown.
+        return Verdict("unknown", f"unusable last_success: {last_success!r}")
+    if age > dt.timedelta(days=max_age_days):
+        return Verdict("unknown", f"watch stale: last success {age.days}d ago (limit {max_age_days}d)")
+
     commit, _ = read_pinned()
     try:
         head = subprocess.run(
@@ -423,8 +460,14 @@ def drift(max_age_days: int = 8) -> Verdict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["consistency", "provenance", "drift"])
+    ap.add_argument(
+        "--last-success",
+        help="ISO timestamp of this watch's previous successful run (drift mode)",
+    )
     args = ap.parse_args()
-    verdict = drift() if args.mode == "drift" else verify(args.mode)
+    verdict = (
+        drift(args.last_success) if args.mode == "drift" else verify(args.mode)
+    )
     print(f"{args.mode}: {verdict.status} — {verdict.detail}")
     return {"ok": 0, "failed": 1, "unknown": 3}[verdict.status]
 
@@ -466,11 +509,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
-      - run: uv run tools/check_vendor.py drift
+      - name: Run the watch against its own previous success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ts=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/vendor-drift.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0].created_at // empty' || true)
+          if [ -n "$ts" ]; then
+            uv run tools/check_vendor.py drift --last-success "$ts"
+          else
+            uv run tools/check_vendor.py drift   # no prior success → unknown, by design
+          fi
 ```
 
 An unknown verdict exits 3, so the job goes red. That is the point: silence and cleanliness
-must not look the same.
+must not look the same. The freshness threshold is evaluated against the watch's **own**
+previous successful run, so a schedule that stops firing is caught by the next run that does
+fire — and a watch that never fires again is caught by the fleet's scheduled-run sensor, which
+reads workflow state from outside this repository.
 
 - [ ] **Step 6: Commit**
 
