@@ -18,18 +18,25 @@ import hashlib
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-API = (
-    "https://api.github.com/repos/andrei-shtanakov/discovery-toolkit"
-    "/contents/{rel}?ref={commit}"
-)
+REPO = "andrei-shtanakov/discovery-toolkit"
+CONTENTS_API = f"https://api.github.com/repos/{REPO}/contents/{{rel}}?ref={{commit}}"
+HEAD_API = f"https://api.github.com/repos/{REPO}/commits/HEAD"
 
 Fetcher = Callable[[str, str], bytes | None]
+
+
+def _auth_headers() -> dict[str, str]:
+    """Authorization header from GITHUB_TOKEN, if set (avoids the 60/hr
+    unauthenticated rate limit that both workflows would otherwise share)."""
+    token = os.environ.get("GITHUB_TOKEN")
+    return {"Authorization": f"Bearer {token}"} if token else {}
 
 
 @dataclass
@@ -77,12 +84,30 @@ def local_path(rel: str) -> Path:
 
 def github_fetch(commit: str, rel: str) -> bytes | None:
     """Default fetcher: read a blob from the upstream repo via the GitHub API."""
+    url = CONTENTS_API.format(
+        rel=urllib.parse.quote(rel), commit=urllib.parse.quote(commit)
+    )
+    request = urllib.request.Request(url, headers=_auth_headers())
     try:
-        with urllib.request.urlopen(
-            API.format(rel=rel, commit=commit), timeout=20
-        ) as response:
+        with urllib.request.urlopen(request, timeout=20) as response:
             return base64.b64decode(json.load(response)["content"])
-    except (urllib.error.URLError, TimeoutError, KeyError, ValueError):
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, TypeError):
+        return None
+
+
+def github_head_fetch(commit: str, rel: str) -> bytes | None:
+    """Default fetcher for drift(): resolve upstream's default-branch HEAD sha.
+
+    Unlike github_fetch, which reads file blobs via the Contents API, this
+    hits the Commits API — there is no file literally named "HEAD" to read,
+    so reusing github_fetch's endpoint here would 404 on every real run.
+    """
+    del commit, rel
+    request = urllib.request.Request(HEAD_API, headers=_auth_headers())
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.load(response)["sha"].encode("utf-8")
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, TypeError):
         return None
 
 
@@ -129,7 +154,7 @@ def drift(fetch: Fetcher | None = None) -> Verdict:
     fleet's scheduled-run sensor.
     """
     commit, _ = read_pinned()
-    fetch = fetch or github_fetch
+    fetch = fetch or github_head_fetch
     head = fetch("HEAD", "HEAD")
     if head is None:
         return Verdict("unknown", "upstream HEAD unreachable")
@@ -144,7 +169,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=["consistency", "provenance", "drift"])
     args = parser.parse_args()
-    verdict = drift() if args.mode == "drift" else verify(args.mode)
+    try:
+        verdict = drift() if args.mode == "drift" else verify(args.mode)
+    except OSError as exc:
+        # A malformed or missing PINNED.txt is not proof of failure or
+        # success — it means this run could not determine an answer.
+        verdict = Verdict("unknown", f"could not read vendored state: {exc}")
+    except ValueError as exc:
+        verdict = Verdict("unknown", f"could not parse PINNED.txt: {exc}")
     print(f"{args.mode}: {verdict.status} — {verdict.detail}")
     return {"ok": 0, "failed": 1, "unknown": 3}[verdict.status]
 

@@ -10,3 +10,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv run tools/check_vendor.py drift
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
