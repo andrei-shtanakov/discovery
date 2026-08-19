@@ -88,9 +88,12 @@ workstreams:
       - "tests/test_check_vendor.py"
       - "tests/test_vendor_pull.py"
       # TDD-режим создаёт по red-файлу на задачу — их надо объявлять, иначе
-      # ex-post scope-гейт останавливает воркстрим уже после успешной работы
-      # (наблюдалось 2026-08-19). Диапазоны не пересекаются между воркстримами.
-      - "tests/test_task_00[12]_red.py"
+      # ex-post scope-гейт останавливает воркстрим уже после успешной работы.
+      # Имена перечислены поштучно: матчер maestro (scope_gate._glob_to_regex)
+      # понимает только `**`, `*` и `?`, а любой другой символ берёт буквально —
+      # символьный класс `[12]` не совпадает ни с чем. Проверено боем 2026-08-19.
+      - "tests/test_task_001_red.py"
+      - "tests/test_task_002_red.py"
       # conftest.py заводит A1 (пути импорта); соседям он достаётся готовым
       - "conftest.py"
       - ".github/workflows/**"
@@ -137,7 +140,10 @@ workstreams:
       - "tests/test_journal.py"
       - "tests/test_session.py"
       - "tests/test_payload.py"
-      - "tests/test_task_00[3-6]_red.py"
+      - "tests/test_task_003_red.py"
+      - "tests/test_task_004_red.py"
+      - "tests/test_task_005_red.py"
+      - "tests/test_task_006_red.py"
     depends_on: [a1-contract]
     priority: 90
 
@@ -183,8 +189,11 @@ workstreams:
       - "tests/test_render.py"
       - "tests/test_gate.py"
       - "tests/test_protocol.py"
-      - "tests/test_task_00[7-9]_red.py"
-      - "tests/test_task_01[01]_red.py"
+      - "tests/test_task_007_red.py"
+      - "tests/test_task_008_red.py"
+      - "tests/test_task_009_red.py"
+      - "tests/test_task_010_red.py"
+      - "tests/test_task_011_red.py"
     depends_on: [a1-contract]
     priority: 90
 
@@ -226,6 +235,7 @@ workstreams:
       - "src/discovery/cli.py"
       - "tests/test_cli.py"
       - "tests/test_boundary.py"
-      - "tests/test_task_01[23]_red.py"
+      - "tests/test_task_012_red.py"
+      - "tests/test_task_013_red.py"
     depends_on: [b-state, c-protocol]
     priority: 80
