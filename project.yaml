@@ -86,6 +86,13 @@ workstreams:
       - "tools/**"
       - "tests/test_vendored_copy.py"
       - "tests/test_check_vendor.py"
+      - "tests/test_vendor_pull.py"
+      # TDD-режим создаёт по red-файлу на задачу — их надо объявлять, иначе
+      # ex-post scope-гейт останавливает воркстрим уже после успешной работы
+      # (наблюдалось 2026-08-19). Диапазоны не пересекаются между воркстримами.
+      - "tests/test_task_00[12]_red.py"
+      # conftest.py заводит A1 (пути импорта); соседям он достаётся готовым
+      - "conftest.py"
       - ".github/workflows/**"
     depends_on: []
     priority: 100
@@ -130,6 +137,7 @@ workstreams:
       - "tests/test_journal.py"
       - "tests/test_session.py"
       - "tests/test_payload.py"
+      - "tests/test_task_00[3-6]_red.py"
     depends_on: [a1-contract]
     priority: 90
 
@@ -175,6 +183,8 @@ workstreams:
       - "tests/test_render.py"
       - "tests/test_gate.py"
       - "tests/test_protocol.py"
+      - "tests/test_task_00[7-9]_red.py"
+      - "tests/test_task_01[01]_red.py"
     depends_on: [a1-contract]
     priority: 90
 
@@ -216,5 +226,6 @@ workstreams:
       - "src/discovery/cli.py"
       - "tests/test_cli.py"
       - "tests/test_boundary.py"
+      - "tests/test_task_01[23]_red.py"
     depends_on: [b-state, c-protocol]
     priority: 80

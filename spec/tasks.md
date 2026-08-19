@@ -39,7 +39,8 @@ upstream-чекауту, которого внутри maestro-worktree нет (
 - [ ] `tools/check_vendor.py` с режимами `consistency` / `provenance` / `drift`, коды выхода 0/1/3
 - [ ] `provenance` сравнивает байты с upstream-деревом на пиненом коммите; недоступность → `unknown` (exit 3), никогда не `ok`
 - [ ] Негативный тест: `consistency` не описывает себя как доказательство происхождения
-- [ ] `drift` красит job красным при `unknown`; порог протухания 8 дней при недельном расписании
+- [ ] `drift` красит job красным при `unknown`; **свежесть самой вахты не проверяется изнутри job'а** — это вечная блокировка (первый прогон не имеет предыдущего успеха), её ловит внешний наблюдатель
+- [ ] Манифест `PINNED.txt` сам предмет проверки: удаление строки не должно тихо выводить файл из-под обеих гарантий (`EXPECTED_SURFACE` + регресс-тест)
 - [ ] Оба workflow заведены: `vendor-integrity` (PR) и `vendor-drift` (scheduled)
 
 **Traces to:** план Task 2, спека §4
@@ -203,6 +204,8 @@ upstream-чекауту, которого внутри maestro-worktree нет (
 
 **Checklist:**
 - [ ] Фреймы **пред-вендорены** на базовую ветку с обновлением `PINNED.txt` (та же причина, что у TASK-001: upstream вне worktree)
+- [ ] Пути банка читаются по реальной раскладке toolkit (`.claude/skills/discovery-interview/frames/`), а пишутся плоско в `contract/frames/` — отображение source→dest, а не общий префикс
+- [ ] `EXPECTED_SURFACE` расширен обоими файлами банка
 - [ ] `parse_frame` читает маркер `coverage_key` / `produces`, ключ не угадывается по заголовку
 - [ ] Инвариант: каждый required-ключ фрейма заявлен ≥1 темой; нарушение — error
 - [ ] `produces` сверяется с префиксом из `FRAMES`; `coverage_key: none` легитимен
