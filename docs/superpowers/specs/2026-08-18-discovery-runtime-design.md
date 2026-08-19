@@ -198,8 +198,28 @@ never about the artifact:
 | state | rule |
 |---|---|
 | `awaiting_input` | some required topic of the frame still has an unissued question, **or** some issued question has no recorded answer |
-| `complete` | every required topic of the frame is exhausted **and** no issued question is unanswered |
-| `unknown` | the journal cannot be read or parsed |
+| `complete` | the source declares at least one question for the frame, every required topic is exhausted, **and** no issued question is unanswered |
+| `unknown` | the journal cannot be read or parsed, **or** nothing is pending and the source declares no question at all for the frame |
+
+**An empty source is `unknown`, not `complete`.** Read without the first clause,
+the `complete` rule is satisfied before a single question has been asked
+whenever the bank serves nothing: no required topic has an unissued question,
+and nothing issued is unanswered. The D1 smoke run showed exactly that —
+`lifecycle: complete` on a session whose transcript was empty. The runtime would
+be asserting that a conversation is finished while holding no evidence that one
+ever started, which is the same "report the unknown as a definite state" this
+design refuses everywhere else: an unreachable upstream is `unknown` and never
+`ok` (§4), and the gate axis keeps its own `unknown` rather than borrowing
+`pass` (§7). So `complete` carries a precondition — the source must have
+declared at least one question for the frame. A bank that cannot serve it —
+unvendored, mis-pinned, or filtered to nothing — leaves the conversation axis
+`unknown`, and the exit code says so.
+
+`awaiting_input` still wins over an empty source, and the order of the three
+rules is what makes that true. An issued question with no recorded answer is
+evidence in the journal that a conversation is under way — evidence the bank
+cannot take back by going empty between two calls. Only the `complete` branch
+gains the precondition, because `complete` is the claim with nothing behind it.
 
 `complete` does **not** imply `gate: pass`. A conversation can end with thin
 answers that render empty sections and fail GC-05 — which is exactly why the two
@@ -266,7 +286,7 @@ both what it asked for and where the session stands. Only exit `1` may report
 
 | code | meaning | priority |
 |---|---|---|
-| `1` | state or tool unknown — nothing was decided (`operation.status: unknown`) | highest |
+| `1` | an axis could not be determined (`lifecycle` or `gate` is `unknown`), or the call itself decided nothing (`operation.status: unknown`) | highest |
 | `2` | refused precondition: no target question, or a conflicting answer without `--supersede`; state readable and **unchanged** | |
 | `20` | `lifecycle: awaiting_input` (§5) | |
 | `10` | `lifecycle: complete`, `gate: fail` | |
@@ -281,6 +301,14 @@ and `10` on the next. `findings` are returned even at `20` — otherwise a perso
 cannot see that the brief is also defective, only that it is unfinished. `2` is
 kept distinct from `1` because a refusal is a known state, and folding it into
 "unknown" would make a retry look reasonable when it is not.
+
+The two triggers of `1` are not the same event, and the envelope keeps them
+apart. An unreadable journal collapses **both** axes and `operation` — nothing
+about the session is known. An empty question source collapses only
+`lifecycle`: the session was read, the call succeeded (`operation.status: ok`),
+and `gate` is still computed from whatever the transcript renders. Folding the
+second case into the first would throw away a gate verdict the runtime actually
+holds, and the axes exist precisely so it does not have to.
 
 `20` is the shape that makes the stage callable by a run: waiting is a state,
 not a failure and not a command. Unreadable state is `unknown` (`lifecycle`

@@ -6,9 +6,14 @@ and behaves as the contract's gate linter.
 """
 
 import hashlib
+import sys
 from pathlib import Path
 
 from discovery.contract.gate_check import FRAMES, check
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+
+from check_vendor import local_path  # noqa: E402
 
 CONTRACT_DIR = Path(__file__).resolve().parent.parent / "src" / "discovery" / "contract"
 
@@ -36,11 +41,18 @@ def test_pinned_commit_is_a_full_sha_and_lists_at_least_one_file():
 
 
 def test_pinned_digests_match_local_files():
+    """Resolution goes through check_vendor.local_path, not a second copy of it.
+
+    A manifest key is an upstream path and the vendored layout is flat, so
+    "key -> file" is a mapping, not a join. Re-deriving it here would put the
+    same rule in two places, and the copy that did not know about `frames/`
+    is exactly what went stale when the bank was vendored.
+    """
     pinned_text = (CONTRACT_DIR / "PINNED.txt").read_text()
     _, digests = _parse_pinned(pinned_text)
 
     for name, expected_digest in digests.items():
-        actual_digest = hashlib.sha256((CONTRACT_DIR / name).read_bytes()).hexdigest()
+        actual_digest = hashlib.sha256(local_path(name).read_bytes()).hexdigest()
         assert actual_digest == expected_digest, f"digest mismatch for {name}"
 
 
