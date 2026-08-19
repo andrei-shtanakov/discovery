@@ -114,8 +114,21 @@ def github_head_fetch(commit: str, rel: str) -> bytes | None:
 def verify(
     mode: Literal["consistency", "provenance"], fetch: Fetcher | None = None
 ) -> Verdict:
-    """Check consistency (against PINNED.txt) or provenance (against upstream)."""
+    """Check consistency (against PINNED.txt) or provenance (against upstream).
+
+    Both modes first assert that the manifest still covers `EXPECTED_SURFACE`:
+    `PINNED.txt` declares WHAT is checked, so dropping a line from it would
+    quietly take that file out of both guarantees and leave them green — the
+    "unknown as green" failure this tool exists to prevent.
+    """
     commit, manifest = read_pinned()
+    missing = EXPECTED_SURFACE - set(manifest)
+    if missing:
+        return Verdict(
+            "failed",
+            "PINNED.txt does not cover the expected surface: "
+            + ", ".join(sorted(missing)),
+        )
     if mode == "consistency":
         drifted = [
             rel

@@ -160,3 +160,22 @@ def test_concurrent_writes_do_not_share_temp_file(tmp_path):
     assert artifact.read_text(encoding="utf-8") == long_text
     leftover_tmp = [p for p in session_dir.iterdir() if p.name.startswith(".tmp")]
     assert leftover_tmp == []
+
+
+def test_header_disagreeing_with_its_directory_is_unreadable(tmp_path):
+    """Регресс: session_id из header участвует в answer_id.
+
+    Подменённый или повреждённый header менял бы идентичность ответа и ломал
+    определение повтора и конфликта, хотя весь файловый ввод-вывод ключуется по
+    проверенному аргументу `--session`. Сессия, которая не может назвать своё
+    место, нечитаема.
+    """
+    session = Session.create(tmp_path, _make_header(session_id="s-real"))
+    path = tmp_path / "s-real" / "header.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["session_id"] = "s-someone-else"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+
+    with pytest.raises(SessionUnreadable):
+        Session.load(tmp_path, "s-real")
+    assert session.header.session_id == "s-real"

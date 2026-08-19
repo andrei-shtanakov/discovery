@@ -10,8 +10,11 @@ pin that has fallen behind, and EXPECTED_SURFACE is itself a checked fact
 rather than something PINNED.txt could silently drop out from under.
 """
 
+import hashlib
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
@@ -74,9 +77,15 @@ def test_expected_surface_catches_a_manifest_missing_a_line():
 def test_consistency_mismatch_fails(tmp_path, monkeypatch):
     contract_md = tmp_path / "DISCOVERY-BRIEF-CONTRACT.md"
     contract_md.write_text("pinned content\n")
+    # Манифест обязан покрывать весь EXPECTED_SURFACE, иначе verify отвергнет его
+    # раньше, чем дойдёт до сверки байт, и тест проверял бы не то, что заявляет.
+    gate_py = tmp_path / "gate_check.py"
+    gate_py.write_text("FRAMES = {}\n")
+    gate_digest = hashlib.sha256(gate_py.read_bytes()).hexdigest()
     (tmp_path / "PINNED.txt").write_text(
         "commit: 0000000000000000000000000000000000000000\n"
         "DISCOVERY-BRIEF-CONTRACT.md deadbeef\n"
+        f"gate_check.py {gate_digest}\n"
     )
     monkeypatch.setattr(check_vendor, "CONTRACT", tmp_path)
 
@@ -126,3 +135,25 @@ def test_drift_default_fetcher_resolves_head_via_the_commits_api(monkeypatch):
 
     assert requested_urls == [check_vendor.HEAD_API]
     assert "/contents/" not in requested_urls[0]
+
+
+def test_reduced_manifest_fails_both_modes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Регресс: манифест сам предмет проверки, а не только её вход.
+
+    Удаление строки из PINNED.txt раньше тихо выводило файл из-под обеих
+    гарантий и оставляло их зелёными — тот самый класс «неизвестность как
+    зелёное», против которого инструмент и заведён.
+    """
+    (tmp_path / "DISCOVERY-BRIEF-CONTRACT.md").write_text("x\n")
+    (tmp_path / "PINNED.txt").write_text(
+        "commit: " + "a" * 40 + "\nDISCOVERY-BRIEF-CONTRACT.md " + "0" * 64 + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_vendor, "CONTRACT", tmp_path)
+
+    for mode in ("consistency", "provenance"):
+        verdict = check_vendor.verify(mode, fetch=lambda *_: b"whatever")
+        assert verdict.status == "failed"
+        assert "gate_check.py" in verdict.detail

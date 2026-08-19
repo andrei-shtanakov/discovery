@@ -105,4 +105,14 @@ class Session:
             header = SessionHeader(**raw)
         except (OSError, ValueError, TypeError) as exc:
             raise SessionUnreadable(f"{path.parent}: {exc}") from exc
+        if header.session_id != session_id:
+            # The header must agree with the directory it was loaded from.
+            # `session_id` feeds `answer_id`, so a header that disagrees would
+            # silently change answer identity and defeat replay/conflict
+            # detection. A session that cannot say where it lives is not
+            # readable — fail closed rather than trust the file.
+            raise SessionUnreadable(
+                f"{path}: header says session_id={header.session_id!r}, "
+                f"loaded from {session_id!r}"
+            )
         return Session(header)
