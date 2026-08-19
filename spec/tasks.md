@@ -231,7 +231,7 @@
 - [ ] `start` → exit 20, процесс завершён, `status`/`answer` из нового процесса
 - [ ] Достигнуты `lifecycle: complete`, `gate: pass`, exit 0
 - [ ] Бриф записан в разрешённый путь целевого репо; независимый прогон вендоренного гейта чист
-- [ ] Леджер связывает session id, `transcript_sha256`, `brief_sha256` и commit/PR целевого репо
+- [ ] Леджер связывает session id, `transcript_sha256`, `brief_sha256` и commit/PR целевого репо — хеши берутся здесь и только здесь, потому что журнал лежит под `$DISCOVERY_HOME`, а бриф ещё не закоммичен: иначе нечем утверждать, что бриф в PR — это бриф этой сессии
 - [ ] Нет стейкхолдера → статус `implementation complete, live acceptance pending`, не `accepted`
 
 **Traces to:** план Task 16, спека §12

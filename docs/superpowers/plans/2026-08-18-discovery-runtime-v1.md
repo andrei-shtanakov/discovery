@@ -2727,7 +2727,7 @@ expansion applies to this run alone.
 - [ ] **Step 4: From a new process, `status` then `answer`** — repeatedly, with a real stakeholder answering. Record the session id.
 - [ ] **Step 5: Reach `lifecycle: complete`, `gate: pass`, exit `0`.** A thin brief that fails the gate is not acceptance; continue the interview.
 - [ ] **Step 6: `brief --out` into the allowed path in the target repo**, then verify independently: `uv run python -m discovery.contract.gate_check <brief>` exits 0.
-- [ ] **Step 7: Record the ledger** — session id, `transcript_sha256`, `brief_sha256`, and the commit/PR of the target repo, all in the evidence file.
+- [ ] **Step 7: Record the ledger** — session id, `transcript_sha256`, `brief_sha256`, and the commit/PR of the target repo, all in the evidence file. Hash the artifacts here and only here: the journal lives under `$DISCOVERY_HOME` and the brief is not yet committed, so a hash is the only thing that ties the brief in the pull request to this session. Everything that *is* in git — backlog, plan, config — is pinned by the launch commit sha instead (spec §11).
 - [ ] **Step 8: Commit and open the PR** for the arc.
 
 If no stakeholder is available, the arc's status is **`implementation complete, live acceptance

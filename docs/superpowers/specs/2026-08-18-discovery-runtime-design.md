@@ -405,8 +405,17 @@ create keys spec-runner never reads.
 **Blocking checks before the first agent** (all fail-closed): repository
 identity and baseline; `git config --local core.worktree` empty; `spec-runner
 run --all --dry-run` reporting zero validation errors; the count of recognised
-`TASK-` entries reconciled against the number the spec declares; the spec's
-SHA-256 recorded before the run, so a retry has something to compare against.
+`TASK-` entries reconciled against the number the spec declares; and the
+**commit sha of `pilot/runtime-v1` at launch** recorded in the ledger, so what
+the agents were told is a recorded fact rather than a reconstruction.
+
+One commit sha, not per-file hashes of the backlog and the plan. Those files sit
+outside every workstream's scope, so an agent editing them is an out-of-scope
+write that the scope gate catches and that git records permanently — with the
+diff, which a hash comparison cannot give. Per-file hashes stay only where git
+cannot stand in: the live-acceptance ledger (§12), whose artifacts are outside
+version control at the moment they are hashed.
+
 The repo's governance-gate caller is wired here — its trigger ("code or CI
 appeared in the repo") fires with this arc.
 
@@ -437,7 +446,11 @@ The live evidence, in order:
 5. The brief is written to the permitted `brief_path` in the target repo.
 6. An independent invocation of the vendored gate confirms the clean result.
 7. A ledger ties together session id, transcript SHA-256, brief SHA-256, and the
-   commit / PR in the target repo.
+   commit / PR in the target repo. The hashes are taken here, and only here,
+   because these artifacts are outside version control at that moment: the
+   journal lives under `$DISCOVERY_HOME`, and the brief is not yet committed.
+   Hashing them is the only way to state that the brief in the pull request is
+   the brief this session produced.
 
 **Honesty rule for the arc's status.** With no stakeholder available the status
 is `implementation complete, live acceptance pending` — never `accepted`. An
