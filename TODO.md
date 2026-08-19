@@ -104,7 +104,8 @@
       ADR TL;DR 2 и README запрещают писать `tasks.md`/design/execution-планы. Пока
       это утверждение в прозе; у соседа-аналога (dispatcher) такие инварианты
       проверяются кодом.
-- [ ] Живая приёмка стадии Need с реальным стейкхолдером (TASK-016) @owner:github:andrei-shtanakov @trigger:"PR #10 влит в master" @id:live-acceptance
+- [x] Живая приёмка стадии Need с реальным стейкхолдером (TASK-016) @owner:github:andrei-shtanakov @id:live-acceptance
+      **Пройдена 2026-08-19.** Фрейм customer, 19 вопросов банка, сессия `s-fdc8a84d92d2`; `complete` + `gate: pass` + exit 0, `gate_passed: true`. Бриф — dispatcher#162, независимый прогон гейта чист. Леджер и три находки — `docs/evidence/2026-08-19-live-acceptance-run.md`.
       Отдельный прогон и отдельный файл доказательств (дизайн §12), запускать от
       `master` после мержа: леджер ссылается на коммит, который уже не перепишется.
       Расширение `write_scope` на целевой репо объявляется ДО первой команды и
@@ -117,6 +118,24 @@
       Тонкий бриф, валящий гейт, приёмкой не считается — интервью продолжается.
       Пока не пройдено, статус арки — `implementation complete, live acceptance
       pending`, **не** `accepted`.
+- [ ] Проецировать `gate_passed` в контракт статуса: `gate: pass` не значит «бриф полон» @owner:github:andrei-shtanakov @id:gate-passed-not-projected
+      Найдено живой приёмкой. Линтер проверяет, что бриф корректен и не врёт о себе:
+      GC-04 требует присутствия ключей `coverage`, но не значения `covered`; GC-11 —
+      совпадения `gate_passed` с вычисленным. Бриф из трёх записей честно пишет
+      `gate_passed: false` при восьми `missing` — расхождения нет, PASS, exit 0.
+      Настоящая защита от дырявого брифа (формула §4) в конверт не попадает вовсе, и
+      вызывающий прогон не отличает полный бриф от трёх записей. Тот же класс, что
+      чинила вся арка. Решение — правка §7: третья ось либо проекция в код выхода.
+- [ ] Строковое `traces` в payload молча рассыпается на символы @owner:github:andrei-shtanakov @id:traces-string-silently-wrong
+      `render._fr_all_traced` делает `[str(t) for t in fields["traces"]]`: для списка это
+      элементы, для строки `"[J-02, G-01]"` — отдельные символы. `'J'` и `'G'` проходят
+      фильтр префикса, но не находятся среди id, функция возвращает `False`, и
+      `gate_passed` становится ложным при полном покрытии. Неверный ответ вместо отказа:
+      тип поля не проверяется. Чинить проверкой типа, а не документацией.
+- [ ] Назвать в документации вызова, что `exit 20` ломает `&&` @owner:github:andrei-shtanakov @id:exit-20-breaks-and
+      `awaiting_input` — успешное состояние, но не нулевой код, поэтому `cmd_a && cmd_b`
+      обрывается на нём. Для стадии, спроектированной pipeline-callable, это стоит
+      сказать явно рядом с таблицей кодов.
 - [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests
 - [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark
       План §3: прогон живёт в нетрекаемом стенде `discovery-test`, фикстуры L0/L1 — в

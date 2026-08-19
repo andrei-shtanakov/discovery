@@ -15,9 +15,10 @@
 **Статусы сверены с кодом 2026-08-19.** TASK-001…013 закрыты первой аркой
 (PR #9, доказательства — `docs/evidence/2026-08-19-runtime-v1-implementation-run.md`),
 TASK-014…015 — второй (доказательства —
-`docs/evidence/2026-08-19-a2-d2-implementation-run.md`). Открыт только
-TASK-016: живая приёмка требует реального стейкхолдера, поэтому статус арки —
-`implementation complete, live acceptance pending`, а не `accepted`.
+`docs/evidence/2026-08-19-a2-d2-implementation-run.md`). TASK-016 закрыт живой приёмкой 2026-08-19 (доказательства —
+`docs/evidence/2026-08-19-live-acceptance-run.md`, бриф — dispatcher#162), поэтому
+статус арки — `accepted`. Три находки приёмки заведены отдельными пунктами
+`TODO.md`: непроецируемый `gate_passed`, строковое `traces`, `exit 20` и `&&`.
 
 ## Milestone A1: вендоренный контракт
 
@@ -243,15 +244,15 @@ upstream-чекауту, которого внутри maestro-worktree нет (
 **Blocks:** [TASK-016]
 
 ### TASK-016: Живая приёмка с реальным стейкхолдером
-🟡 P1 | ⬜ TODO | Est: 1d
+🟡 P1 | ✅ DONE | Est: 1d
 
 **Checklist:**
-- [ ] Расширение `write_scope` на целевой репо объявлено ДО прогона и только для него
-- [ ] `start` → exit 20, процесс завершён, `status`/`answer` из нового процесса
-- [ ] Достигнуты `lifecycle: complete`, `gate: pass`, exit 0
-- [ ] Бриф записан в разрешённый путь целевого репо; независимый прогон вендоренного гейта чист
-- [ ] Файл доказательств связывает session id, `transcript_sha256`, `brief_sha256` и commit/PR целевого репо — эти два артефакта единственные, что арка хеширует, и хеши снимаются на этом шаге: журнал лежит под `$DISCOVERY_HOME`, бриф ещё не закоммичен, и связать бриф в PR с этой сессией больше нечем. Всё, что уже в git, пинится commit SHA запуска (спека §11)
-- [ ] Нет стейкхолдера → статус `implementation complete, live acceptance pending`, не `accepted`
+- [x] Расширение `write_scope` на целевой репо объявлено ДО прогона и только для него
+- [x] `start` → exit 20, процесс завершён, `status`/`answer` из нового процесса
+- [x] Достигнуты `lifecycle: complete`, `gate: pass`, exit 0
+- [x] Бриф записан в разрешённый путь целевого репо; независимый прогон вендоренного гейта чист
+- [x] Файл доказательств связывает session id, `transcript_sha256`, `brief_sha256` и commit/PR целевого репо — эти два артефакта единственные, что арка хеширует, и хеши снимаются на этом шаге: журнал лежит под `$DISCOVERY_HOME`, бриф ещё не закоммичен, и связать бриф в PR с этой сессией больше нечем. Всё, что уже в git, пинится commit SHA запуска (спека §11)
+- [x] Нет стейкхолдера → статус `implementation complete, live acceptance pending`, не `accepted`
 
 **Traces to:** план Task 16, спека §12
 **Depends on:** [TASK-015]
