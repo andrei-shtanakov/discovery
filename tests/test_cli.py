@@ -9,9 +9,9 @@ refused with the journal unchanged unless `--supersede` is passed
 (REQ-005, REQ-006); an unknown session collapses every command to
 `unknown` (REQ-007); sessions live under `$DISCOVERY_HOME/sessions`,
 defaulting to `~/.discovery/sessions` (REQ-008); `build_source()` defaults
-to an empty `StaticQuestionSource` unless a test monkeypatches it
-(REQ-009); and a repeated call over an unchanged journal returns an
-identical envelope (NFR-001).
+to the vendored, pinned bank unless a test monkeypatches it (REQ-009); and
+a repeated call over an unchanged journal returns an identical envelope
+(NFR-001).
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from discovery import cli
+from discovery.bank import BankQuestionSource
 from discovery.questions import Question, StaticQuestionSource
 
 ENVELOPE_KEYS = {"lifecycle", "gate", "next_action", "findings", "operation"}
@@ -336,14 +337,25 @@ class TestSessionLayout:
 
 
 class TestDefaultQuestionSource:
-    """REQ-009: build_source() defaults to an empty StaticQuestionSource."""
+    """REQ-009: build_source() defaults to the vendored, pinned bank."""
 
-    def test_build_source_defaults_to_an_empty_static_source(self):
+    def test_build_source_defaults_to_the_pinned_bank(self):
         source = cli.build_source()
 
-        assert isinstance(source, StaticQuestionSource)
-        assert source.pin == "unpinned"
-        assert source.questions("customer") == []
+        assert isinstance(source, BankQuestionSource)
+        pinned_txt = (
+            Path(__file__).resolve().parent.parent
+            / "src"
+            / "discovery"
+            / "contract"
+            / "PINNED.txt"
+        )
+        commit = next(
+            line.removeprefix("commit:").strip()
+            for line in pinned_txt.read_text(encoding="utf-8").splitlines()
+            if line.startswith("commit:")
+        )
+        assert source.pin == commit
 
 
 class TestDeterminism:
