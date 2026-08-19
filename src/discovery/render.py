@@ -18,21 +18,27 @@ import yaml
 
 from discovery.contract.gate_check import FRAMES
 
+# Section headings follow the contract's §2 table, not this module's taste:
+# `J` is "Jobs-to-be-done" and `X` is "Stakeholder Conflicts" there, and a brief
+# that renames them is navigable only by whoever wrote the renderer. The linter
+# does not parse these headings (`_DEF_RE` finds entries, `_HEADING_RE` only
+# closes a block), so nothing here is load-bearing for the gate — which is
+# exactly why it drifted unnoticed until a human read the output.
 SECTION_TITLES = {
     "G": "Goals",
     "P": "Personas",
-    "J": "Jobs",
-    "FR": "Functional requirements",
-    "NFR": "Non-functional requirements",
+    "J": "Jobs-to-be-done",
+    "FR": "Functional Requirements",
+    "NFR": "Non-Functional",
     "CON": "Constraints",
-    "M": "Success metrics",
-    "OUT": "Out of scope",
-    "S": "Systems",
+    "M": "Success Metrics",
+    "OUT": "Out of Scope",
+    "S": "System Assessment",
     "IF": "Interfaces",
-    "AP": "Architecture preferences",
+    "AP": "Architecture Preferences",
     "RK": "Risks",
-    "Q": "Open questions",
-    "X": "Conflicts",
+    "Q": "Open Questions",
+    "X": "Stakeholder Conflicts",
 }
 
 _SECTION_ORDER = list(SECTION_TITLES)
@@ -49,6 +55,7 @@ class SessionHeaderLike(Protocol):
     """The subset of `SessionHeader` (WS-B) `render_brief` reads."""
 
     frame: str
+    target: str
     traces_to: list[str]
     created_at: str
 
@@ -237,7 +244,8 @@ def render_brief(
     }
 
     frontmatter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
-    text = f"---\n{frontmatter}---\n{_render_body(entries)}"
+    title = f"# Discovery Brief — {header.target} ({frame}-фрейм)"
+    text = f"---\n{frontmatter}---\n\n{title}\n\n{_render_body(entries)}"
     if findings:
         text += _render_findings(findings)
     return text

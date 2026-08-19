@@ -138,7 +138,8 @@
       `awaiting_input` — успешное состояние, но не нулевой код, поэтому `cmd_a && cmd_b`
       обрывается на нём. Для стадии, спроектированной pipeline-callable, это стоит
       сказать явно рядом с таблицей кодов.
-- [ ] Заголовки секций рендера расходятся с §2 контракта и с брифами в целевых репо @owner:github:andrei-shtanakov @id:section-titles-diverge
+- [x] Заголовки секций рендера расходятся с §2 контракта и с брифами в целевых репо @owner:github:andrei-shtanakov @id:section-titles-diverge
+      **Исправлено в PR #11.** `SECTION_TITLES` приведены к таблице §2, добавлен H1 с целевым репо и фреймом, `SessionHeaderLike` расширен полем `target`, заведены регресс-тесты. Бриф в dispatcher#162 ре-рендерен из того же транскрипта: `transcript_sha256` не изменился.
       Найдено ревью Copilot на dispatcher#162. `SECTION_TITLES` (`src/discovery/render.py:21`)
       — собственный список рантайма, и два имени расходятся с таблицей §2 контракта:
       `J` рендерится как `Jobs` вместо «Jobs-to-be-done», `X` — как `Conflicts` вместо

@@ -10,6 +10,7 @@ class Header:
     """Minimal stand-in for `SessionHeader` (WS-B) — only the fields read."""
 
     frame: str
+    target: str = "org/repo"
     traces_to: list[str] = field(default_factory=list)
     created_at: str = "2026-08-19T10:00:00Z"
 
