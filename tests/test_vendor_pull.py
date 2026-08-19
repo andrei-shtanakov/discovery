@@ -173,3 +173,9 @@ def test_vendor_pull_include_frames_copies_and_pins_frame_files(tmp_path):
     expected_engineer_sha = hashlib.sha256(engineer_src.read_bytes()).hexdigest()
     assert f"{customer_upstream_rel} {expected_customer_sha}" in pinned
     assert f"{engineer_upstream_rel} {expected_engineer_sha}" in pinned
+
+    # Frames are additive: CORE files must still be copied and pinned.
+    assert (dest / "DISCOVERY-BRIEF-CONTRACT.md").exists()
+    assert (dest / "gate_check.py").exists()
+    assert "DISCOVERY-BRIEF-CONTRACT.md" in pinned
+    assert "gate_check.py" in pinned
