@@ -1,0 +1,148 @@
+# Maestro DAG — discovery runtime v1 (арка реализации, режим ecosystem-development).
+#
+# base_branch — ИНТЕГРАЦИОННАЯ ветка пилота, не master: maestro сливает
+# завершённый воркстрим в base_branch локально (auto_pr управляет только
+# leaf-PR'ами), поэтому человеческий гейт стоит на финальном PR
+# pilot/runtime-v1 -> master.
+#
+# Канонический бэклог: spec/tasks.md (TASK-001…016). Maestro генерирует свои
+# spec/maestro-* спеки на каждый воркстрим через `spec-runner plan --full`;
+# канонические статусы сверяются вручную после мержа финального PR.
+#
+# В этот прогон входят A1/B/C/D1 (TASK-001…013). A2 (TASK-014) заблокирован
+# апстримом discovery-toolkit#4, D2 (TASK-015…016) зависит от A2 и живого
+# стейкхолдера — они пойдут вторым прогоном, когда блокеры снимутся.
+
+project: discovery-runtime-v1
+description: |
+  Стадия Need, вызываемая прогоном: детерминированное ядро (журнал сессии →
+  coverage → рендер → вендоренный гейт) с единственным портом QuestionSource.
+  Канонический бэклог и критерии приёмки: spec/tasks.md TASK-001…013.
+  Пошаговый план с точными тестами и сигнатурами:
+  docs/superpowers/plans/2026-08-18-discovery-runtime-v1.md.
+
+# Maestro требует абсолютный или ~-путь (validate_repo_path); ~ держит конфиг
+# свободным от машинно-специфичного имени пользователя.
+repo_url: https://github.com/andrei-shtanakov/discovery
+repo_path: ~/labs/all_ai_orchestrators/discovery
+workspace_base: ~/labs/all_ai_orchestrators/discovery-maestro-ws
+
+max_concurrent: 2
+base_branch: pilot/runtime-v1
+branch_prefix: "ws/"
+auto_pr: false
+
+spec_runner:
+  max_retries: 2
+  task_timeout_minutes: 30
+  claude_model: sonnet          # фиксирован: плавающая модель делает результат неатрибутируемым
+  test_command: "uv run pytest"
+  run_tests_on_done: true
+  lint_command: "uv run ruff check . && uv run ruff format --check ."
+  run_lint_on_done: true
+  extra_executor_config:        # оверлей накладывается на весь executor.config.yaml,
+    executor:                   # поэтому незеркалимые поля обязаны лежать под `executor:`
+      execution_mode: tdd
+      tdd_runner: pytest
+
+workstreams:
+  - id: a1-contract
+    title: "A1 — вендоренный контракт и две гарантии копии"
+    description: |
+      Выполнить TASK-001 и TASK-002 из spec/tasks.md ровно так, как они
+      расписаны в docs/superpowers/plans/2026-08-18-discovery-runtime-v1.md
+      (Task 1 и Task 2): в плане лежит готовый код инструментов, тексты тестов
+      и ожидаемый вывод каждой команды. НЕ придумывать альтернативную
+      декомпозицию и не переписывать тесты под реализацию.
+
+      Ключевое, что легко потерять: вендоренные файлы не редактируются ни на
+      байт (для них выставлен per-file-ignores = ["ALL"]), а copy-integrity
+      сравнивает байты с upstream-деревом НА КОММИТЕ ИЗ PINNED.txt —
+      совпадение с локально сохранённым checksum доказывает согласованность
+      копии, а не её происхождение. Недоступный upstream — это `unknown`
+      (exit 3), никогда не `pass`.
+    scope:
+      - "pyproject.toml"
+      - "src/discovery/__init__.py"
+      - "src/discovery/contract/**"
+      - "tools/**"
+      - "tests/test_vendored_copy.py"
+      - "tests/test_check_vendor.py"
+      - ".github/workflows/**"
+    depends_on: []
+    priority: 100
+
+  - id: b-state
+    title: "B — состояние сессии: хеши, журнал, раскладка, payload"
+    description: |
+      Выполнить TASK-003…TASK-006 из spec/tasks.md по плану
+      docs/superpowers/plans/2026-08-18-discovery-runtime-v1.md (Task 3–6):
+      в плане даны точные сигнатуры и тесты, следовать им дословно.
+
+      Durability обещана явно и проверяется тестами: append — это блокировка,
+      одна целая JSONL-строка O_APPEND, flush и fsync; запись артефакта —
+      temp-файл рядом, os.replace и fsync КАТАЛОГА (без него переименование
+      теряется при отключении питания). `answer_id` включает participant_role,
+      поля разделены NUL. Битая строка журнала — это JournalUnreadable, а не
+      молчаливый пропуск.
+    scope:
+      - "src/discovery/hashing.py"
+      - "src/discovery/journal.py"
+      - "src/discovery/session.py"
+      - "src/discovery/payload.py"
+      - "tests/test_hashing.py"
+      - "tests/test_journal.py"
+      - "tests/test_session.py"
+      - "tests/test_payload.py"
+    depends_on: [a1-contract]
+    priority: 90
+
+  - id: c-protocol
+    title: "C — порт вопросов, lifecycle, рендер, гейт, конверт статуса"
+    description: |
+      Выполнить TASK-007…TASK-011 из spec/tasks.md по плану
+      docs/superpowers/plans/2026-08-18-discovery-runtime-v1.md (Task 7–11).
+
+      Три вещи, которые тесты проверяют именно потому, что их легко нарушить:
+      next_action для уже выданного вопроса восстанавливается ИЗ ЖУРНАЛА, а не
+      резолвом id по текущему банку (иначе ре-пин банка молча меняет смысл id);
+      порядок render(pending) → check → render(вердикт) → check, принимается
+      только второй проход, и он обязан быть чист по GC-15 — runtime зеркалит
+      линтер, а не предсказывает его; приоритет кодов 1 > 2 > 20 > 10 > 0,
+      причём findings возвращаются и при 20.
+    scope:
+      - "src/discovery/questions.py"
+      - "src/discovery/lifecycle.py"
+      - "src/discovery/render.py"
+      - "src/discovery/gate.py"
+      - "src/discovery/protocol.py"
+      - "tests/test_questions.py"
+      - "tests/test_lifecycle.py"
+      - "tests/test_render.py"
+      - "tests/test_gate.py"
+      - "tests/test_protocol.py"
+    depends_on: [a1-contract]
+    priority: 90
+
+  - id: d1-cli
+    title: "D1 — CLI поверх ядра и граница author ≠ execute"
+    description: |
+      Выполнить TASK-012 и TASK-013 из spec/tasks.md по плану
+      docs/superpowers/plans/2026-08-18-discovery-runtime-v1.md (Task 12–13).
+
+      CLI композирует и не держит собственных правил. Выдача вопроса
+      персистится ДО возврата команды — иначе падение между возвратом и
+      записью делает пришедший ответ неатрибутируемым. Повтор того же
+      answer_id — no-op; конфликтующий ответ отвергается с exit 2 и
+      СОХРАНЁННЫМИ осями; с --supersede в журнал ложатся оба события.
+      Граница проверяется capability-тестом (разрешённые записи + отсутствие
+      сетевых и process-launch импортов в ядре), а не поиском строк.
+
+      build_source() в этом воркстриме возвращает пустой StaticQuestionSource —
+      банк подключается в D2 после снятия блокера discovery-toolkit#4.
+    scope:
+      - "src/discovery/cli.py"
+      - "tests/test_cli.py"
+      - "tests/test_boundary.py"
+    depends_on: [b-state, c-protocol]
+    priority: 80
