@@ -184,7 +184,15 @@ def _render_body(entries: list[Entry]) -> str:
 
 
 def _render_findings(findings: list[str]) -> str:
-    lines = ["<!-- gate findings:"] + [f"- {f}" for f in findings] + ["-->"]
+    # A leading heading line closes the last body entry in `gate_check`'s
+    # parser (which otherwise has no signal that the body has ended), so the
+    # comment's own text can never be folded into — and corrupt — a real
+    # entry's regex-parsed fields (status/blocking/traces/...).
+    lines = (
+        ["## Gate findings", "", "<!-- gate findings:"]
+        + [f"- {f}" for f in findings]
+        + ["-->"]
+    )
     return "\n\n" + "\n".join(lines)
 
 

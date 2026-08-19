@@ -100,3 +100,46 @@ class TestPassingBrief:
         result = render_and_gate(CUSTOMER, events, tmp_path)
 
         assert "gate findings" not in result.text
+
+
+class TestPassingBriefWithWarningsOnly:
+    def test_warning_only_findings_still_pass_and_survive_into_result(self, tmp_path):
+        """A brief with zero errors but a real warning (GC-14: solution-space
+        entry in a customer-frame brief) must still gate "pass" — and the
+        warning must survive, unmangled, into the returned findings."""
+        events = [
+            answer(
+                "customer.all.01",
+                "product",
+                _ALL_REQUIRED_COVERED + "  - id: S-01\n    body: a system\n",
+            )
+        ]
+
+        result = render_and_gate(CUSTOMER, events, tmp_path)
+
+        assert result.status == "pass"
+        assert any(f.startswith("GC-14") for f in result.findings)
+        assert not any(f.startswith("GC-15") for f in result.findings)
+
+
+class TestPass2NeverCorruptsTrailingEntry:
+    def test_findings_comment_does_not_leak_into_last_body_entry(self, tmp_path):
+        """Regression: the embedded findings HTML comment must not be parsed
+        as part of the brief's last body entry — else its own finding
+        message text can pollute that entry's regex-parsed fields
+        (status/blocking/traces/...), swallowing a real finding (GC-09
+        here) or fabricating a spurious one (GC-10, from a corrupted
+        conflict count) in its place."""
+        events = [
+            answer(
+                "customer.all.01",
+                "product",
+                _ALL_REQUIRED_COVERED + "  - id: X-01\n    body: a conflict\n",
+            )
+        ]
+
+        result = render_and_gate(CUSTOMER, events, tmp_path)
+
+        assert result.status == "fail"
+        assert any(f.startswith("GC-09") for f in result.findings)
+        assert not any(f.startswith("GC-10") for f in result.findings)
