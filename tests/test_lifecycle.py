@@ -3,6 +3,7 @@
 from discovery.lifecycle import (
     AWAITING_INPUT,
     COMPLETE,
+    UNKNOWN,
     answered_ids,
     compute_lifecycle,
     issued,
@@ -269,3 +270,16 @@ class TestComputeLifecycle:
         )
 
         assert compute_lifecycle(events, source, "customer") == AWAITING_INPUT
+
+    def test_empty_source_and_journal_is_unknown(self):
+        empty_source = StaticQuestionSource(pin="pin-1", catalogue={})
+
+        assert compute_lifecycle([], empty_source, "customer") == UNKNOWN
+
+    def test_pending_question_outranks_empty_source_catalogue(self):
+        empty_source = StaticQuestionSource(pin="pin-1", catalogue={})
+        events = [question_asked("customer.goals.01", "goals", "What problem?")]
+
+        result = compute_lifecycle(events, empty_source, "customer")
+
+        assert result == AWAITING_INPUT

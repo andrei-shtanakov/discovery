@@ -58,7 +58,15 @@ def next_question(
 
 
 def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) -> str:
-    """`awaiting_input` iff a next question exists, `complete` otherwise."""
-    if next_question(events, source, frame) is None:
-        return COMPLETE
-    return AWAITING_INPUT
+    """`awaiting_input` iff a next question exists.
+
+    A pending (issued, unanswered) question outranks an empty source: it is
+    checked first and, if found, always yields `awaiting_input`. Only once
+    nothing is pending does an empty source catalogue yield `unknown` rather
+    than `complete`.
+    """
+    if next_question(events, source, frame) is not None:
+        return AWAITING_INPUT
+    if not source.questions(frame):
+        return UNKNOWN
+    return COMPLETE
