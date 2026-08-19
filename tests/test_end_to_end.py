@@ -91,6 +91,9 @@ class TestCustomerInterviewEndToEnd:
         findings = gate_check.check(
             out_path.read_text(encoding="utf-8"), base_dir=out_path.parent
         )
-        errors = [f for f in findings if f.level == "error"]
-        verdict = "fail" if errors else "pass"
-        assert verdict in {"pass", "fail"}
+        # gate: fail is an acceptable outcome here — the synthetic answers
+        # need not satisfy every substantive rule. What matters is that
+        # gate_check ran against the real brief and returned well-formed
+        # findings instead of raising or short-circuiting on empty input.
+        assert isinstance(findings, list)
+        assert all(f.level in {"error", "warning"} and f.message for f in findings)
