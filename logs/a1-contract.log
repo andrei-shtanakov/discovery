@@ -1,23 +1,23 @@
-08:19:09 [info     ] validation_complete            errors=0 file=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/discovery-maestro-ws/a1-contract/spec/maestro-tasks.md module=validate run_id=fffaa7cc warnings=0
-08:19:09 [info     ] Tasks to execute               count=1 module=cli run_id=fffaa7cc
-08:19:09 [info     ] Queued task                    module=cli name='Скелет пакета и вендоринг контракта' run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] Next ready task                module=cli name='Скелет пакета и вендоринг контракта' run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] 📍 Attempt 1/2                  module=runner run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] 🚀 Starting: Скелет пакета и вендоринг контракта module=runner run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] Executing task                 module=execution name='Скелет пакета и вендоринг контракта' run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] Pre-start hook                 module=hooks run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] [TASK-001] ⏳ stage: sync_deps  module=runner run_id=fffaa7cc
-08:19:09 [info     ] Syncing dependencies           module=hooks run_id=fffaa7cc
-08:19:09 [info     ] Dependencies synced            module=hooks run_id=fffaa7cc
-08:19:09 [info     ] Updated spec/.gitignore with runtime-state entries added=['.executor-*', '.*task-history.log', '.*spec.lock'] module=git_ops run_id=fffaa7cc
-08:19:09 [info     ] [TASK-001] ⏳ stage: branch     module=runner run_id=fffaa7cc
-08:19:09 [warning  ] Rescued uncommitted work before the branch stage module=hooks paths=['logs/01M0C3H9SWN9T6NX94PQJMJ703/', 'logs/01M0C3X4JBSEY0KQ67P6SPST7C/', 'uv.lock'] run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] 📦 stashed 3 uncommitted path(s) before starting (logs/01M0C3H9SWN9T6NX94PQJMJ703/, logs/01M0C3X4JBSEY0KQ67P6SPST7C/, uv.lock) as “spec-runner rescue: TASK-001 at 2026-08-19T08:19:09” — recover with `git stash list` / `git stash pop` module=runner run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] Created branch                 branch=task/task-001 module=hooks run_id=fffaa7cc
-08:19:09 [info     ] [TASK-001] ⏳ stage: tests      module=runner run_id=fffaa7cc
-08:19:09 [info     ] TDD phase                      detail=None module=lifecycle phase=red_authoring run_id=fffaa7cc task_id=TASK-001
-08:19:09 [info     ] 🔴 RED: authoring a failing test module=runner run_id=fffaa7cc task_id=TASK-001
-08:21:42 [info     ] ⛔ RED not confirmed, refusing to implement: no confirmed red for this task in this workstream — lint failed on the file about to be frozen (tests/test_task_001_red.py): error: Failed to spawn: `ruff` /   Caused by: No such file or directory (os error 2). After a checkpoint it is byte-immutable, so this must be fixed before the red is fixed. module=runner run_id=fffaa7cc task_id=TASK-001
-08:21:42 [info     ] Fatal error (HOOK_FAILURE) -- no retry module=runner run_id=fffaa7cc task_id=TASK-001
-08:21:42 [info     ] No more ready tasks            blocked_count=1 blocked_tasks={'TASK-002': 'TASK-001'} module=cli run_id=fffaa7cc
-08:21:42 [info     ] Execution summary              completed=0 failed=0 failed_attempts=1 module=cli remaining=1 run_id=fffaa7cc
+08:33:33 [info     ] validation_complete            errors=0 file=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/discovery-maestro-ws/a1-contract/spec/maestro-tasks.md module=validate run_id=232a628c warnings=0
+08:33:33 [info     ] Tasks to execute               count=1 module=cli run_id=232a628c
+08:33:33 [info     ] Queued task                    module=cli name='Скелет пакета и вендоринг контракта' run_id=232a628c task_id=TASK-001
+08:33:33 [info     ] Next ready task                module=cli name='Скелет пакета и вендоринг контракта' run_id=232a628c task_id=TASK-001
+08:33:33 [info     ] 📍 Attempt 1/2                  module=runner run_id=232a628c task_id=TASK-001
+08:33:33 [info     ] 🚀 Starting: Скелет пакета и вендоринг контракта module=runner run_id=232a628c task_id=TASK-001
+08:33:33 [info     ] Executing task                 module=execution name='Скелет пакета и вендоринг контракта' run_id=232a628c task_id=TASK-001
+08:33:33 [info     ] Pre-start hook                 module=hooks run_id=232a628c task_id=TASK-001
+08:33:33 [info     ] [TASK-001] ⏳ stage: sync_deps  module=runner run_id=232a628c
+08:33:33 [info     ] Syncing dependencies           module=hooks run_id=232a628c
+08:33:33 [info     ] Dependencies synced            module=hooks run_id=232a628c
+08:33:33 [info     ] Updated spec/.gitignore with runtime-state entries added=['.executor-*', '.*task-history.log', '.*spec.lock'] module=git_ops run_id=232a628c
+08:33:33 [info     ] [TASK-001] ⏳ stage: branch     module=runner run_id=232a628c
+08:33:34 [warning  ] Rescued uncommitted work before the branch stage module=hooks paths=['uv.lock'] run_id=232a628c task_id=TASK-001
+08:33:34 [info     ] 📦 stashed 1 uncommitted path(s) before starting (uv.lock) as “spec-runner rescue: TASK-001 at 2026-08-19T08:33:33” — recover with `git stash list` / `git stash pop` module=runner run_id=232a628c task_id=TASK-001
+08:33:34 [info     ] Created branch                 branch=task/task-001 module=hooks run_id=232a628c
+08:33:34 [info     ] [TASK-001] ⏳ stage: tests      module=runner run_id=232a628c
+08:33:34 [info     ] TDD phase                      detail=None module=lifecycle phase=red_authoring run_id=232a628c task_id=TASK-001
+08:33:34 [info     ] 🔴 RED: authoring a failing test module=runner run_id=232a628c task_id=TASK-001
+08:34:45 [info     ] ⛔ RED not confirmed, refusing to implement: no confirmed red for this task in this workstream — lint failed on the file about to be frozen (tests/test_task_001_red.py): error: Failed to spawn: `ruff` /   Caused by: No such file or directory (os error 2). After a checkpoint it is byte-immutable, so this must be fixed before the red is fixed. module=runner run_id=232a628c task_id=TASK-001
+08:34:45 [info     ] Fatal error (HOOK_FAILURE) -- no retry module=runner run_id=232a628c task_id=TASK-001
+08:34:45 [info     ] No more ready tasks            blocked_count=1 blocked_tasks={'TASK-002': 'TASK-001'} module=cli run_id=232a628c
+08:34:45 [info     ] Execution summary              completed=0 failed=0 failed_attempts=1 module=cli remaining=1 run_id=232a628c

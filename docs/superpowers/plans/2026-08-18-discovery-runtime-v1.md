@@ -140,11 +140,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
-DEST = Path(__file__).resolve().parents[1] / "src" / "discovery" / "contract"
+DEST = Path(
+    os.environ.get("VENDOR_DEST")
+    or Path(__file__).resolve().parents[1] / "src" / "discovery" / "contract"
+)
 CORE = ["DISCOVERY-BRIEF-CONTRACT.md", "gate_check.py"]
 FRAMES = [
     ".claude/skills/discovery-interview/frames/customer.md",
@@ -188,16 +192,74 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 3: Vendor the two core files**
+- [ ] **Step 3: Make the package importable around the already-vendored copy**
 
-Run: `uv run tools/vendor_pull.py ../discovery-toolkit`
-Expected: `src/discovery/contract/` now holds `DISCOVERY-BRIEF-CONTRACT.md`, `gate_check.py`,
-`PINNED.txt`. Do not run with `--include-frames` yet — the bank lands in Task 11.
+`src/discovery/contract/` **already holds** `DISCOVERY-BRIEF-CONTRACT.md`, `gate_check.py`
+and `PINNED.txt`: they were vendored onto the base branch before the run, by hand, from the
+upstream tree at the pinned commit. Do not run `vendor_pull.py` against a sibling checkout
+here — **there is no upstream checkout inside a worktree**. `../discovery-toolkit` resolves
+next to the *worktree*, not next to the primary clone, and vendoring is a one-shot developer
+action that needs access no isolated task should have. (Learned the hard way: this step as
+originally written made TASK-001 unexecutable under maestro — see
+`docs/evidence/2026-08-19-runtime-v1-implementation-run.md`, attempt 3.)
+
+The same applies to the bank in Task 14: those files are pre-vendored too, when that task's
+upstream dependency lands.
 
 Create `src/discovery/__init__.py` and `src/discovery/contract/__init__.py`, both empty.
 The `__init__.py` sits *beside* the vendored file; the vendored file itself stays untouched.
 
-- [ ] **Step 4: Write the failing test**
+- [ ] **Step 4: Write the failing tests**
+
+The vendoring tool gets a **hermetic** test: a fake upstream built in `tmp_path`, never a
+sibling checkout. It is the only honest way to test it inside a worktree, and it pins the
+tool's contract (bytes copied verbatim, `PINNED.txt` lists commit and per-file digests)
+without depending on anything outside the test.
+
+```python
+# tests/test_vendor_pull.py
+import subprocess
+import sys
+from pathlib import Path
+
+TOOL = Path(__file__).resolve().parents[1] / "tools" / "vendor_pull.py"
+
+
+def make_fake_upstream(root: Path) -> str:
+    """A real git repo with the two vendored files, so HEAD is a real commit."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "DISCOVERY-BRIEF-CONTRACT.md").write_text("contract bytes\n", encoding="utf-8")
+    (root / "gate_check.py").write_text("FRAMES = {}\n", encoding="utf-8")
+    run = lambda *a: subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True)
+    run("init", "-q")
+    run("config", "user.email", "t@example.com")
+    run("config", "user.name", "t")
+    run("add", ".")
+    run("commit", "-qm", "fixture")
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def test_pinned_txt_records_the_commit_and_digests(tmp_path, monkeypatch):
+    upstream = tmp_path / "upstream"
+    commit = make_fake_upstream(upstream)
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    monkeypatch.setenv("VENDOR_DEST", str(dest))
+    subprocess.run(
+        [sys.executable, str(TOOL), str(upstream)], check=True, capture_output=True
+    )
+    pinned = (dest / "PINNED.txt").read_text(encoding="utf-8")
+    assert f"commit: {commit}" in pinned
+    assert "DISCOVERY-BRIEF-CONTRACT.md " in pinned
+    assert (dest / "gate_check.py").read_text(encoding="utf-8") == "FRAMES = {}\n"
+```
+
+`vendor_pull.py` therefore reads its destination from `VENDOR_DEST` when set, defaulting to
+`src/discovery/contract` — a two-line change to the tool in Step 2, and the reason it exists:
+a tool that can only write one hardcoded path cannot be tested without touching the repo.
 
 ```python
 # tests/test_vendored_copy.py
@@ -245,15 +307,16 @@ def test_the_linter_is_importable_and_exposes_the_frames_table():
 
 - [ ] **Step 5: Run the tests**
 
-Run: `uv run pytest tests/test_vendored_copy.py -v`
-Expected: PASS (the vendoring in Step 3 already satisfies them). If
+Run: `uv run pytest tests/test_vendor_pull.py tests/test_vendored_copy.py -v`
+Expected: PASS (the copy vendored onto the base branch already satisfies the second file;
+the first is hermetic and needs nothing outside `tmp_path`). If
 `test_the_linter_is_importable...` fails on import, the package layout is wrong — check that
 `src/discovery/contract/__init__.py` exists and `uv run` resolves the project.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pyproject.toml src/discovery tools/vendor_pull.py tests/test_vendored_copy.py
+git add pyproject.toml src/discovery tools/vendor_pull.py tests/test_vendor_pull.py tests/test_vendored_copy.py
 git commit -m "feat(contract): vendor brief contract and gate_check at a pinned commit"
 ```
 

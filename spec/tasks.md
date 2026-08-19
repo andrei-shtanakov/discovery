@@ -19,12 +19,16 @@
 
 **Checklist:**
 - [ ] `pyproject.toml`: пакет `src/discovery`, зависимость `pyyaml`, ruff line-length 88, `per-file-ignores = ["ALL"]` на вендоренный `gate_check.py`
-- [ ] `tools/vendor_pull.py` копирует контракт и линтер и пишет `PINNED.txt` (upstream, commit, `path sha256`)
-- [ ] Вендоренные `DISCOVERY-BRIEF-CONTRACT.md` и `gate_check.py` лежат в `src/discovery/contract/` и импортируются как `discovery.contract.gate_check`
+- [ ] `tools/vendor_pull.py` копирует контракт и линтер и пишет `PINNED.txt` (upstream, commit, `path sha256`); назначение берётся из `VENDOR_DEST`, иначе `src/discovery/contract`
+- [ ] Тест инструмента **герметичный**: поддельный upstream в `tmp_path`, никакого соседнего чекаута — внутри worktree его и нет
+- [ ] Вендоренные `DISCOVERY-BRIEF-CONTRACT.md` и `gate_check.py` **уже лежат** в `src/discovery/contract/` (пред-вендоринг на базовой ветке); задача добавляет `__init__.py` и делает их импортируемыми как `discovery.contract.gate_check`
 - [ ] `tests/test_vendored_copy.py` зелёный: пин называет 40-символьный коммит, файлы совпадают с digest'ами, `FRAMES` и `check()` доступны
 - [ ] Вендоренные файлы не отредактированы ни на байт
 
 **Traces to:** план Task 1, спека §4
+**Примечание:** вендоринг — одноразовое действие разработчика, требующее доступа к
+upstream-чекауту, которого внутри maestro-worktree нет (`../discovery-toolkit` резолвится
+рядом с worktree). Поэтому копия кладётся на базовую ветку до прогона; задача её не тянет.
 **Depends on:** —
 **Blocks:** [TASK-002], [TASK-003], [TASK-007]
 
@@ -198,7 +202,7 @@
 🟡 P1 | ⬜ TODO | Est: 3h
 
 **Checklist:**
-- [ ] Фреймы вендорятся с обновлением `PINNED.txt`
+- [ ] Фреймы **пред-вендорены** на базовую ветку с обновлением `PINNED.txt` (та же причина, что у TASK-001: upstream вне worktree)
 - [ ] `parse_frame` читает маркер `coverage_key` / `produces`, ключ не угадывается по заголовку
 - [ ] Инвариант: каждый required-ключ фрейма заявлен ≥1 темой; нарушение — error
 - [ ] `produces` сверяется с префиксом из `FRAMES`; `coverage_key: none` легитимен
