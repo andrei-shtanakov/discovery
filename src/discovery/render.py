@@ -50,6 +50,10 @@ class SessionHeaderLike(Protocol):
 
     frame: str
     traces_to: list[str]
+    created_at: str
+
+
+GENERATED_BY = "discovery-runtime"
 
 
 @dataclass(frozen=True)
@@ -180,7 +184,15 @@ def _render_body(entries: list[Entry]) -> str:
 
 
 def _render_findings(findings: list[str]) -> str:
-    lines = ["<!-- gate findings:"] + [f"- {f}" for f in findings] + ["-->"]
+    # A leading heading line closes the last body entry in `gate_check`'s
+    # parser (which otherwise has no signal that the body has ended), so the
+    # comment's own text can never be folded into — and corrupt — a real
+    # entry's regex-parsed fields (status/blocking/traces/...).
+    lines = (
+        ["## Gate findings", "", "<!-- gate findings:"]
+        + [f"- {f}" for f in findings]
+        + ["-->"]
+    )
     return "\n\n" + "\n".join(lines)
 
 
@@ -212,6 +224,9 @@ def render_brief(
         "schema": "discovery-brief",
         "schema_version": 1,
         "spec_stage": "discovery",
+        "status": "draft",
+        "generated_by": GENERATED_BY,
+        "generated_at": header.created_at,
         "validation": validation,
         "interview": {"frame": frame, "sessions": _sessions(events)},
         "coverage": {**coverage, "gate_passed": _gate_passed(coverage, entries, frame)},

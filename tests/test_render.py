@@ -13,6 +13,7 @@ class Header:
 
     frame: str
     traces_to: list[str] = field(default_factory=list)
+    created_at: str = "2026-08-19T10:00:00Z"
 
 
 def answer(question_id, role, payload):
@@ -65,6 +66,25 @@ class TestFrontmatterShape:
         text = render_brief(CUSTOMER, events, "fail")
 
         assert _frontmatter(text)["validation"] == "fail"
+
+
+class TestSpecMetaCore:
+    """GC-02 requires non-empty status/generated_by/generated_at (contract §5)."""
+
+    def test_carries_status_generated_by_and_generated_at(self):
+        events = [
+            answer(
+                "customer.goals.01",
+                "product",
+                "entries:\n  - id: G-01\n    body: reach 10k users\n",
+            )
+        ]
+
+        meta = _frontmatter(render_brief(CUSTOMER, events, "pending"))
+
+        assert meta["status"] == "draft"
+        assert meta["generated_by"]
+        assert meta["generated_at"] == CUSTOMER.created_at
 
 
 class TestCoverage:
