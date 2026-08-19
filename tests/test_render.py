@@ -12,6 +12,7 @@ class Header:
     """Minimal stand-in for `SessionHeader` (WS-B) — only the fields read."""
 
     frame: str
+    target: str = "org/repo"
     traces_to: list[str] = field(default_factory=list)
     created_at: str = "2026-08-19T10:00:00Z"
 
@@ -157,7 +158,7 @@ class TestBodyRendering:
 
         text = render_brief(CUSTOMER, events, "pending")
 
-        assert "## Functional requirements" in text
+        assert "## Functional Requirements" in text
         assert "- **FR-01** Users can export a report" in text
         assert "**Priority**: Must" in text
         assert "**Acceptance**: exports complete within 5s" in text
@@ -182,6 +183,41 @@ class TestBodyRendering:
         assert "## Goals" in text
         assert "## Personas" in text
         assert text.index("## Goals") < text.index("## Personas")
+
+    def test_section_titles_follow_the_contract_table_not_local_taste(self):
+        """§2 names the sections; a renamed section is navigable only by us.
+
+        The linter never parses these headings, so nothing here fails the
+        gate — which is why the drift survived until a human read a brief
+        (found reviewing dispatcher#162).
+        """
+        from discovery.render import SECTION_TITLES
+
+        assert SECTION_TITLES["J"] == "Jobs-to-be-done"
+        assert SECTION_TITLES["X"] == "Stakeholder Conflicts"
+        assert SECTION_TITLES["S"] == "System Assessment"
+        assert all(
+            title == title[0].upper() + title[1:] for title in SECTION_TITLES.values()
+        )
+
+    def test_brief_opens_with_an_h1_naming_target_and_frame(self):
+        events = [
+            answer(
+                "customer.goals.01",
+                "product",
+                "entries:\n  - id: G-01\n    body: a goal\n",
+            )
+        ]
+
+        text = render_brief(CUSTOMER, events, "pending")
+        body = text.split("---\n", 2)[2]
+
+        assert body.lstrip().startswith(
+            "# Discovery Brief — org/repo (customer-фрейм)"
+        ), (
+            "a brief with no title is an anonymous document once it leaves the "
+            "session directory"
+        )
 
 
 _ALL_REQUIRED_COVERED = (
