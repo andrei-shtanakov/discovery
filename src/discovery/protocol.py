@@ -24,6 +24,14 @@ NO_TARGET_QUESTION = "no_target_question"
 ANSWER_CONFLICT = "answer_conflict"
 
 INCOMPLETE = "incomplete"
+UNKNOWN = "unknown"
+
+# The §7 vocabulary of each axis, minus `unknown` (rank 1 covers that).
+# `exit_code` is total: a value outside these sets is a shape the runtime
+# cannot project, and an unprojectable envelope is `1`, never `0`.
+LIFECYCLE_VALUES = {"awaiting_input", "complete"}
+GATE_VALUES = {"pass", "fail"}
+READINESS_VALUES = {"ready", INCOMPLETE}
 
 
 @dataclass
@@ -111,18 +119,31 @@ def unknown(detail: str) -> Envelope:
 
 def exit_code(envelope: Envelope) -> int:
     """
-    1  (highest) — operation.status == "unknown" OR any axis == "unknown"
+    1  (highest) — operation.status == "unknown", any axis == "unknown", or
+                   any axis carrying a value §7 does not define
     2            — operation.status == "refused"       (axes still readable)
     20           — lifecycle == "awaiting_input"        (even if gate == "fail")
     10           — lifecycle == "complete" and gate == "fail"
     11           — lifecycle == "complete", gate == "pass", readiness == "incomplete"
     0  (lowest)  — lifecycle == "complete", gate == "pass", readiness == "ready"
+
+    Rank 1 also covers an envelope whose axes are not a shape §7 defines.
+    Without that, the ranked function's tail answered `0` — success — for
+    input it did not understand, and `11` for combinations its own docstring
+    described as `complete`/`pass`. Reporting success for an unrecognised
+    state is the defect this axis exists to remove, one level up.
     """
     if (
-        envelope.operation.get("status") == "unknown"
-        or envelope.lifecycle == "unknown"
-        or envelope.gate == "unknown"
-        or envelope.readiness == "unknown"
+        envelope.operation.get("status") == UNKNOWN
+        or envelope.lifecycle == UNKNOWN
+        or envelope.gate == UNKNOWN
+        or envelope.readiness == UNKNOWN
+    ):
+        return 1
+    if (
+        envelope.lifecycle not in LIFECYCLE_VALUES
+        or envelope.gate not in GATE_VALUES
+        or envelope.readiness not in READINESS_VALUES
     ):
         return 1
     if envelope.operation.get("status") == "refused":

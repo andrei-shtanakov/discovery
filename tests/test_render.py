@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import pytest
 import yaml
 
+from discovery import render as render_module
 from discovery.payload import PayloadInvalid
 from discovery.render import readiness, render_brief
 
@@ -488,3 +489,36 @@ class TestReadiness:
 
         assert result.verdict == "incomplete"
         assert any("feasibility_review" in f for f in result.findings)
+
+
+class TestTranscriptParsedOnce:
+    """`render_brief` parses the transcript once per pass.
+
+    Raised by GitHub Copilot on PR #12: the §4 verdict used to be taken
+    through the events-level `readiness()`, which re-parsed every payload
+    the caller had just parsed. The formula still lives in one place —
+    `_readiness_of` — but the entry point that re-parses is now only for
+    callers who hold events rather than entries.
+    """
+
+    def test_render_brief_calls_entries_once(self, monkeypatch):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        calls = []
+        original = render_module._entries
+        monkeypatch.setattr(
+            render_module,
+            "_entries",
+            lambda ev: (calls.append(1), original(ev))[1],
+        )
+
+        render_brief(CUSTOMER, events, validation="pending")
+
+        assert len(calls) == 1
+
+    def test_events_and_entries_entry_points_agree(self):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        entries = render_module._entries(events)
+
+        assert readiness(events, "customer") == render_module._readiness_of(
+            entries, "customer"
+        )

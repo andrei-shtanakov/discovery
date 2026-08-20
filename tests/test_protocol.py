@@ -55,6 +55,37 @@ class TestEnvelopeConstructors:
         assert INCOMPLETE == render.INCOMPLETE
 
 
+class TestUnprojectableEnvelope:
+    """An envelope whose axes are not a shape §7 defines is rank 1.
+
+    Found by GitHub Copilot on PR #12. The ranked function used to fall
+    through to `0` for any combination it did not recognise, and to `11`
+    for combinations its own docstring described as `complete`/`pass` —
+    reporting success for a state it could not project is the same defect
+    the readiness axis was added to remove.
+    """
+
+    def test_unknown_lifecycle_value_is_1_not_0(self):
+        assert exit_code(ok("paused", "fail", "ready")) == 1
+
+    def test_unknown_lifecycle_value_is_1_not_11(self):
+        assert exit_code(ok("paused", "fail", "incomplete")) == 1
+
+    def test_unknown_readiness_value_is_1_not_0(self):
+        assert exit_code(ok("complete", "pass", "bogus")) == 1
+
+    def test_unknown_gate_value_is_1_not_20(self):
+        assert exit_code(ok("awaiting_input", "pending", "incomplete")) == 1
+
+    def test_every_documented_combination_still_projects(self):
+        assert exit_code(ok("complete", "pass", "ready")) == 0
+        assert exit_code(ok("complete", "pass", "incomplete")) == 11
+        assert exit_code(ok("complete", "fail", "ready")) == 10
+        assert exit_code(ok("awaiting_input", "pass", "incomplete")) == 20
+        assert exit_code(refused(ANSWER_CONFLICT, "complete", "pass", "ready")) == 2
+        assert exit_code(unknown("journal unreadable")) == 1
+
+
 class TestEnvelopeToJson:
     def test_to_json_round_trips_supplied_values(self):
         envelope = ok(

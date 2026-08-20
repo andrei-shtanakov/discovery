@@ -171,11 +171,19 @@ class ReadinessResult:
 
 
 def readiness(events: list[dict], frame: str) -> ReadinessResult:
-    """`gate_passed` (contract §4), mirrored rather than predicted, with the
-    failed clauses named in a deterministic order: uncovered required topics
-    in frame order, then untraced FRs and blocking open questions in answer
-    order."""
-    entries = _entries(events)
+    """`gate_passed` (contract §4), mirrored rather than predicted.
+
+    The events-level entry point. A caller that has already parsed the
+    transcript into entries uses `_readiness_of` instead, so the payload
+    YAML is parsed once per render pass rather than twice.
+    """
+    return _readiness_of(_entries(events), frame)
+
+
+def _readiness_of(entries: list[Entry], frame: str) -> ReadinessResult:
+    """The §4 formula over already-parsed entries, with the failed clauses
+    named in a deterministic order: uncovered required topics in frame
+    order, then untraced FRs and blocking open questions in answer order."""
     coverage = _coverage(entries, frame)
     ids = {e.eid for e in entries}
     findings: list[str] = []
@@ -293,7 +301,9 @@ def render_brief(
         "interview": {"frame": frame, "sessions": _sessions(events)},
         "coverage": {
             **coverage,
-            "gate_passed": readiness(events, frame).gate_passed,
+            # `entries` is already parsed here; going through the
+            # events-level `readiness()` would re-parse every payload.
+            "gate_passed": _readiness_of(entries, frame).gate_passed,
         },
         "open_questions": len(open_questions),
         "blocking_open_questions": len(blocking_open_questions),
