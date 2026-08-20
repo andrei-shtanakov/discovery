@@ -6,13 +6,18 @@
 ведёт интервью со стейкхолдером и авторит `discovery-brief`, который входит в
 governance-гейты (BR/FRD — фрейм customer; 0b/0a — фрейм engineer).
 
-**Состояние на 2026-07-26 — каркас без реализации:** `main.py` — placeholder,
-зависимостей, тестов и CI нет. Вся рабочая функция стадии живёт в соседнем
-`../discovery-toolkit` (skill `discovery-interview`, канон `DISCOVERY-BRIEF-CONTRACT.md`
-v1.1, линтер `gate_check.py`). Прежде чем что-то реализовывать здесь, прочитай
-`TODO.md`: там записано, что **решение о старте runtime ещё не принято** — ADR выделяет
-этот репо только когда понадобятся состояние, мультиюзер или UI, а оба реальных
-интервью прошли skill'ом без runtime.
+**Состояние на 2026-08-20 — рантайм работает.** Арка runtime-v1 смержена и прошла
+живую приёмку 2026-08-19 (`docs/evidence/`); ось `readiness` и exit 11 добавлены
+PR #12. CLI — четыре команды (`start`/`status`/`answer`/`brief`), console_script
+`discovery`, состояние в `$DISCOVERY_HOME/sessions/`, контракт вызова — в `README.md`,
+дизайн — `docs/superpowers/specs/2026-08-18-discovery-runtime-design.md`. CI гоняет
+pytest/ruff/pyrefly. Решение о старте принято 2026-08-18 (`@id:start-decision`) —
+не по триггеру из ADR (состояние/мультиюзер/UI), а по вызываемости стадии прогоном.
+
+Методология остаётся у соседа `../discovery-toolkit` (skill `discovery-interview`,
+канон `DISCOVERY-BRIEF-CONTRACT.md` v1.1, линтер `gate_check.py`), но рантайм её
+**не резолвит наружу**: контракт, линтер и фреймы вендорены пиненой копией в
+`src/discovery/contract/`.
 
 **Жёсткая граница:** discovery авторит бриф и на этом останавливается. Он **не пишет**
 `tasks.md`, design и планы исполнения — компиляция вниз делегируется governance-слою

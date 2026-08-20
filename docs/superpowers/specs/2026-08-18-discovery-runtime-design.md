@@ -411,11 +411,13 @@ brief, but deciding whether its incompleteness warrants another conversation
 belongs to the human caller. This keeps `lifecycle` a pure function of the
 journal and question source as required by §5.
 
-CLI surface, four commands, all emitting the status above:
+CLI surface, four commands, all emitting the status above on stdout. There is
+no `--json` flag: the envelope is the only output shape, so a switch to select
+it would be a switch with one position.
 
 ```
 start  --frame {customer,engineer} --target <repo> [--traces-to <path>...]
-status --session <id> [--json]
+status --session <id>
 answer --session <id> [--question <id>] --role <participant_role> --file <payload.yaml>|- [--supersede]
 brief  --session <id> --out <brief_path>
 ```
