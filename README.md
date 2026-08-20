@@ -25,9 +25,12 @@ network or process-launch adapter.
 ```
 discovery start  --frame {customer,engineer} --target <repo> [--traces-to <path>]...
 discovery status --session <id>
-discovery answer --session <id> [--question <id>] --role <role> --file <payload.yaml>|-  [--supersede]
+discovery answer --session <id> [--question <id>] --role <role> --file <path> [--supersede]
 discovery brief  --session <id> --out <brief_path>
 ```
+
+`--file -` reads the payload from stdin. Omitting `--question` answers whichever
+question the session is currently waiting on.
 
 The interview survives process boundaries: `start` issues the first question
 and exits, and a later `status` in a **new** process resumes from the session
