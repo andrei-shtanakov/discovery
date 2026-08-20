@@ -1,6 +1,6 @@
 """render_brief — journal to a contract-shaped brief (DESIGN-005).
 
-Pure function of `(header, events, validation, findings)`: frontmatter, coverage
+Pure function of `(header, events, validation)`: frontmatter, coverage
 and body are all derived from `SessionHeader` and the journal's *latest*
 answers; `validation` is the one fact the caller supplies and this module never
 infers or predicts (DESIGN-P3). Superseded answers are excluded structurally —
@@ -290,24 +290,10 @@ def _render_body(entries: list[Entry]) -> str:
     return "\n\n".join(sections)
 
 
-def _render_findings(findings: list[str]) -> str:
-    # A leading heading line closes the last body entry in `gate_check`'s
-    # parser (which otherwise has no signal that the body has ended), so the
-    # comment's own text can never be folded into — and corrupt — a real
-    # entry's regex-parsed fields (status/blocking/traces/...).
-    lines = (
-        ["## Gate findings", "", "<!-- gate findings:"]
-        + [f"- {f}" for f in findings]
-        + ["-->"]
-    )
-    return "\n\n" + "\n".join(lines)
-
-
 def render_brief(
     header: SessionHeaderLike,
     events: list[dict],
     validation: str,
-    findings: list[str] | None = None,
 ) -> str:
     """Derive the entire brief — frontmatter and body — from `header`/`events`.
 
@@ -350,6 +336,4 @@ def render_brief(
     frontmatter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
     title = f"# Discovery Brief — {header.target} ({frame}-фрейм)"
     text = f"---\n{frontmatter}---\n\n{title}\n\n{_render_body(entries)}"
-    if findings:
-        text += _render_findings(findings)
     return text

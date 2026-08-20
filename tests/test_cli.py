@@ -23,6 +23,7 @@ import pytest
 
 from discovery import cli
 from discovery.bank import BankQuestionSource
+from discovery.contract import gate_check
 from discovery.questions import Question, StaticQuestionSource
 
 ENVELOPE_KEYS = {
@@ -651,3 +652,35 @@ class TestMalformedTracesInJournal:
         assert code == 1
         assert envelope["operation"]["status"] == "unknown"
         assert "traces" in envelope["operation"]["reason"]
+
+
+class TestGateInvariantFailsClosed:
+    """§6/§7: a two-pass mismatch reaches the caller as `unknown`, exit 1.
+
+    The boundary must catch it like any other unreadable state — no
+    traceback escaping to stderr, no partial verdict on the axes.
+    """
+
+    def test_mismatch_collapses_every_axis_and_exits_1(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        calls = {"n": 0}
+        real = gate_check.check
+
+        def flaky(text, base_dir=None):
+            calls["n"] += 1
+            if calls["n"] % 2 == 1:
+                return real(text, base_dir=base_dir)
+            return [gate_check.Finding("GC-06", "error", "FR-99", "invented")]
+
+        monkeypatch.setattr("discovery.gate.check", flaky)
+
+        code, envelope = _run(capsys, ["status", "--session", session_id])
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert envelope["lifecycle"] == "unknown"
+        assert envelope["gate"] == "unknown"
+        assert envelope["readiness"] == "unknown"
+        assert "two-pass mismatch" in envelope["operation"]["reason"]

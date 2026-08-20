@@ -284,12 +284,58 @@ single pass would either manufacture a GC-15 finding or force the runtime to
 predict the linter. The order is fixed:
 
 ```
-render(validation: pending) → check → render(validation: pass|fail + findings summary) → check
+render(validation: pending) → check → render(validation: pass|fail) → check
 ```
 
-Only the second pass's result is accepted, and a dedicated assertion holds that
-the second pass is clean with respect to GC-15. The runtime mirrors the linter;
-it never anticipates it.
+The second pass re-renders **only** the verdict. It writes no diagnostics into
+the document: the brief carries the data being checked and the `validation`
+claim about it, and nothing else the runtime learned from checking. The
+linter's findings belong to the run, not to the artifact, and they travel in
+the envelope (§7) where the caller already reads them.
+
+This is not a contract change. `DISCOVERY-BRIEF-CONTRACT.md` defines
+`validation`; it never required an embedded diagnostics section. What is removed
+is a non-normative runtime annotation, not a contract field, and the brief's
+schema version does not move.
+
+Only the second pass's result is accepted, and it is accepted only if the second
+pass saw the same facts as the first:
+
+**The accepted second-pass document contains no generated linter diagnostics,
+and its findings must equal the first pass's real findings** — excluding only
+the provisional GC-15 mismatch that `validation: pending` itself causes. The
+comparison is between ordered lists of findings, not sets: a vanished duplicate
+or a changed order is also a changed result, and normalising it away would hide
+exactly what the invariant is watching for. Any difference means rendering the
+verdict changed the facts being checked, and the operation fails closed —
+`GateInvariantError`, which the CLI's boundary turns into
+`operation.status: unknown` with all three axes `unknown` and exit `1`, rather
+than a verdict derived from a document that moved under it.
+
+Asserting equality rather than merely "no GC-15 in pass 2" is deliberate, and
+the reason is a live incident. GC-05's engineer rule tests whether each upstream
+Must-FR id appears anywhere in the brief — a substring scan over the whole
+document. While the second pass embedded the first pass's findings, the finding
+*"Must-FR FR-07 received no feasibility verdict"* put `FR-07` into the text, so
+the second pass found nothing, GC-15 fired spuriously, and the caller received
+`gate: fail` with the reason missing from `findings`. The document was
+satisfying the check by quoting its own failure. A GC-15-only assertion cannot
+see that; equality can, and it catches the next content-scanning rule without
+knowing anything about it.
+
+The invariant holds in all three shapes. Clean: pass 1 carries the provisional
+GC-15 alone, pass 2 carries nothing, both real sets empty. Warning-only:
+warnings survive unchanged and reach the envelope. Failing: pass 1's GC-05 is
+still pass 2's GC-05, naming the same FR.
+
+**Existing briefs.** A brief rendered before this rule that carries a
+`## Gate findings` block cannot be treated as safely re-checkable by the
+two-pass mechanism: its embedded text is part of what the linter scans. No such
+artifact exists — the three briefs shipped to `dispatcher` are all
+`validation: pass` with zero findings, and the block was only ever emitted for a
+non-empty set — but the rule is stated for the case rather than for the count.
+Should one appear, it is a legacy artifact: re-render it from its transcript,
+never hand-edit it (§5).
 
 The accepted result also carries the §4 readiness verdict and its diagnostics,
 taken from the same public function that supplies the frontmatter's

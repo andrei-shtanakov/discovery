@@ -19,7 +19,7 @@ import uuid
 from pathlib import Path
 
 from discovery import protocol
-from discovery.gate import render_and_gate
+from discovery.gate import GateInvariantError, render_and_gate
 from discovery.hashing import answer_id
 from discovery.journal import (
     ANSWER_RECORDED,
@@ -317,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         SessionUnreadable,
         JournalUnreadable,
         PayloadInvalid,
+        GateInvariantError,
         OSError,
         UnicodeDecodeError,
     ) as exc:

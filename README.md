@@ -107,11 +107,12 @@ envelope whose axes are not a shape the protocol defines is `1`, never `0`.
 > esac
 > ```
 
-**Known limitation.** The engineer frame cannot currently reach
-`readiness: ready`: the required `feasibility_review` key is a process rather
-than a section, and the runtime does not yet mirror the linter's GC-05 rule for
-it, so an engineer run always exits `11`. Tracked as
-`@id:feasibility-review-not-derived` in `TODO.md`.
+**The engineer frame** needs a resolvable `--traces-to` pointing at an upstream
+customer brief with `status: approved`, and it needs the feasibility topic
+answered. The runtime marks `coverage.feasibility_review` covered once that
+question has an answer; the vendored linter then checks the claim against the
+upstream brief and fails the gate, naming the requirement, if any upstream
+Must-FR received no verdict.
 
 ## Development
 

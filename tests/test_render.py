@@ -360,8 +360,16 @@ class TestGatePassed:
         assert meta["coverage"]["gate_passed"] is True
 
 
-class TestFindingsRendering:
-    def test_findings_render_as_a_trailing_html_comment_block(self):
+class TestNoEmbeddedDiagnostics:
+    """§6: the brief carries the data and the verdict, never the diagnostics.
+
+    Embedding them let a finding's own text satisfy the check that produced
+    it — GC-05 scans the whole document for each upstream Must-FR id, and
+    the finding naming FR-07 put "FR-07" into the document. The findings
+    belong to the run and travel in the envelope.
+    """
+
+    def test_the_rendered_brief_carries_no_diagnostics_block(self):
         events = [
             answer(
                 "customer.goals.01",
@@ -370,27 +378,17 @@ class TestFindingsRendering:
             )
         ]
 
-        text = render_brief(
-            CUSTOMER, events, "fail", findings=["GC-06 FR-01: no traces"]
-        )
+        for validation in ("pending", "pass", "fail"):
+            text = render_brief(CUSTOMER, events, validation)
+            assert "gate findings" not in text
+            assert "## Gate findings" not in text
+            assert "<!--" not in text
 
-        assert "<!-- gate findings:" in text
-        assert "- GC-06 FR-01: no traces" in text
-        assert text.rstrip().endswith("-->")
-
-    def test_no_findings_block_when_findings_is_none_or_empty(self):
-        events = [
-            answer(
-                "customer.goals.01",
-                "product",
-                "entries:\n  - id: G-01\n    body: reach 10k users\n",
-            )
-        ]
-
-        assert "gate findings" not in render_brief(CUSTOMER, events, "pending")
-        assert "gate findings" not in render_brief(
-            CUSTOMER, events, "pending", findings=[]
-        )
+    def test_render_brief_takes_no_findings_argument(self):
+        """The parameter is gone, not merely unused: a caller that still
+        passes diagnostics into the document must fail loudly."""
+        with pytest.raises(TypeError):
+            render_brief(CUSTOMER, [], "pass", findings=["GC-06 FR-01: no traces"])
 
 
 class TestTracesTypeOnRead:

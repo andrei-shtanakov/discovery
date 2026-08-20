@@ -21,6 +21,17 @@ from discovery.contract.gate_check import check
 from discovery.render import SessionHeaderLike, readiness, render_brief
 
 
+class GateInvariantError(Exception):
+    """The two passes disagreed — see §6.
+
+    Raised when the accepted second pass does not see the findings the first
+    pass did. That can only mean rendering the verdict changed the facts
+    being checked, so there is no verdict to report and the operation fails
+    closed rather than reporting one derived from a document that moved
+    under it.
+    """
+
+
 @dataclass(frozen=True)
 class GateResult:
     """The accepted (second-pass) outcome of `render_and_gate`."""
@@ -47,13 +58,17 @@ def render_and_gate(
     real_findings = [f for f in pass_1_findings if f.rule != "GC-15"]
     status = "fail" if any(f.level == "error" for f in real_findings) else "pass"
 
-    final_text = render_brief(
-        header,
-        events,
-        validation=status,
-        findings=[str(f) for f in real_findings],
-    )
+    final_text = render_brief(header, events, validation=status)
     pass_2_findings = check(final_text, base_dir=base_dir)
+    # Ordered lists, never sets: a vanished duplicate or a changed order is
+    # also a changed result, and normalising it away would hide exactly what
+    # this invariant watches for (§6).
+    if pass_2_findings != real_findings:
+        raise GateInvariantError(
+            "two-pass mismatch: rendering the verdict changed the findings — "
+            f"pass 1 {[str(f) for f in real_findings]}, "
+            f"pass 2 {[str(f) for f in pass_2_findings]}"
+        )
     # `readiness()` is evaluated three times per call here (once inside each
     # of the two `render_brief` passes above, once directly on the next
     # line), each re-parsing every answer payload's YAML. Safe only because
