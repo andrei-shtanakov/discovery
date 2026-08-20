@@ -112,6 +112,30 @@ per topic, requested upstream in `discovery-toolkit#4`. Until that lands, WS-A2
 is blocked (§10); no heading heuristic and no second `topic → key` table are
 introduced on this side.
 
+**Deriving coverage for a process key.** A required key whose `FRAMES` prefix is
+`None` has no section of its own, so no entry can ever evidence it. It is
+`covered` when at least one bank question carrying that exact `coverage_key` has
+a currently effective answer. A `question_asked` event alone is not enough:
+asking is not answering.
+
+The join uses the latest `question_asked` event and the latest `answer_recorded`
+event for the same `question_id`. The coverage key comes exclusively from the
+persisted `question_asked` event — never from the current bank, and never by
+parsing the question id — so a bank re-pin cannot silently reclassify an
+existing answer.
+
+The rule is scoped to prefix-`None` keys and to nothing else. A prefix-backed key
+stays entry-derived, and must never become closeable by the bare fact of an
+answer without the record that answer was supposed to produce — that would be a
+fail-open of exactly the kind this section's invariant exists to prevent.
+
+`covered` does not assert that the feasibility review is substantively complete
+or correct. It asserts only that a persisted question for that process key has a
+currently effective answer. Whether the claim survives the upstream brief is
+GC-05's question, and GC-12/GC-16's for the reference itself. The runtime states
+the process fact; the vendored linter checks the substantive one; neither
+reimplements the other.
+
 **Fail-closed invariant over the bank**, stated in the direction that catches
 loss: every required key of a frame is claimed by at least one topic marker, and
 where the key's prefix in `FRAMES` is not `None`, the topic's `produces`
@@ -303,16 +327,27 @@ others:
   formula: every required key `covered` with a non-empty section, every FR
   traced to an existing G/J, zero blocking open questions.
 
-**Known limitation: the engineer frame cannot reach `readiness: ready`.** Its
-one required key with no id-prefix, `feasibility_review` ("process, not a
-section" — the frame's `FRAMES` entry), is never `covered` by the coverage
-formula above, which only recognises an entry whose id-prefix matches. Every
-engineer run therefore reports `readiness: incomplete` and exits `11`,
-regardless of how complete the transcript is. This is a disclosure, not a
-regression — the frontmatter's `gate_passed` was already `false` for every
-engineer brief before this axis existed, the envelope simply stopped
-contradicting it — and it is tracked as
-`@id:feasibility-review-not-derived` in `TODO.md`.
+**The engineer frame's `feasibility_review`.** The frame's one required key with
+no id-prefix is not derivable from entries, and the runtime used to write
+`missing` for it unconditionally. That made `readiness: ready` unreachable for
+every engineer run and — less visibly — meant GC-05's engineer rule never ran at
+all: it fires only when the brief claims `coverage.feasibility_review: covered`.
+A key nobody claimed was a check nobody performed.
+
+The runtime now derives it as §4 describes and states the claim. The division is
+deliberate: the runtime proves the process fact it can prove from its own
+journal, the frontmatter carries the claim, and the vendored linter tests that
+claim against the upstream brief. `readiness` projects the same §4 formula as
+before, without acquiring a second implementation of GC-05 — which would have
+meant resolving `traces_to`, reading the upstream document and re-deriving its
+Must-FR set alongside the linter that already does all three.
+
+The cost is named: a thin answer to the feasibility topic now turns a completed
+engineer run into `gate: fail`, exit `10`, with a finding naming the Must-FR
+that received no verdict. That is not a new strictness of policy but the
+activation of a check that already existed and had never run. And passing it is
+not proof that each feasibility verdict is any good — only that the formalised
+checks hold.
 
 The axis is a projection, never a second implementation: `readiness` and the
 frontmatter's `gate_passed` are one public function over the same events, so
