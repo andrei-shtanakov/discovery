@@ -279,6 +279,7 @@ Every command returns the same envelope — including when it refuses:
   "readiness": "ready | incomplete | unknown",
   "next_action": {},
   "findings": [],
+  "readiness_findings": [],
   "operation": {
     "status": "ok | refused | unknown",
     "reason": "no_target_question | answer_conflict"
@@ -348,12 +349,15 @@ about completeness is only worth acting on once the document is known not to
 lie. `findings` are returned at `11` as they are at `20`: a caller must be able
 to see that a brief is both thin and, say, carrying a warning.
 
-An incomplete verdict carries deterministic readiness diagnostics identifying
-the failed clauses: uncovered required keys, FRs without a trace to an existing
-G/J, and blocking open questions. These diagnostics come from the same public
-result that supplies `gate_passed` and `readiness`; they are not reconstructed
-by the protocol layer. Linter findings remain distinguishable from readiness
-diagnostics.
+An incomplete verdict carries deterministic readiness diagnostics in
+`readiness_findings`, identifying the failed clauses: uncovered required keys,
+FRs without a trace to an existing G/J, and blocking open questions. They come
+from the same public result that supplies `gate_passed` and `readiness`, and are
+never reconstructed by the protocol layer. They stay in their own key rather
+than joining `findings`: mixing linter errors with the reasons a brief is thin
+would blur the very boundary between `gate` and `readiness` that this section
+draws — and a lint-valid stub is precisely the case where `findings` is empty
+while the brief is unusable.
 
 `readiness` is reported at `20` as well, where `incomplete` is the expected
 mid-interview value and carries no verdict about the finished brief.
