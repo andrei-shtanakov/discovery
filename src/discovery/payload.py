@@ -59,6 +59,10 @@ def _parse_entry(item: Any) -> Entry:
                 f"{eid}: {key!r} must be a YAML list, got "
                 f"{type(value).__name__}: {value!r}"
             )
+    # A validated `traces` list is stored here as its Python repr (e.g.
+    # "['G-01']"), not as a list — nothing in this module consumes it, since
+    # `render` re-parses the raw payload YAML itself. A future reader of
+    # `Entry.fields["traces"]` must not expect a list back.
     fields = {k: str(v) for k, v in item.items() if k not in RESERVED}
     return Entry(eid=eid, body=body, fields=fields)
 

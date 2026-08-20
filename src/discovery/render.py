@@ -143,7 +143,8 @@ def _traces_of(entry: Entry) -> list[str]:
         return []
     if not isinstance(raw, list):
         raise PayloadInvalid(
-            f"{entry.eid}: 'traces' must be a list, got {type(raw).__name__}: {raw!r}"
+            f"{entry.eid}: 'traces' must be a YAML list, got "
+            f"{type(raw).__name__}: {raw!r}"
         )
     return [str(t) for t in raw]
 
@@ -191,19 +192,27 @@ def readiness(events: list[dict], frame: str) -> ReadinessResult:
         if not matched or any(t not in ids for t in matched):
             findings.append(f"{entry.eid} has no trace to an existing G/J entry")
 
-    for entry in entries:
-        if (
-            entry.prefix == "Q"
-            and not _is_true(entry.fields.get("resolved"))
-            and _is_true(entry.fields.get("blocking"))
-        ):
-            findings.append(f"{entry.eid} is a blocking open question")
+    for entry in _blocking_open(entries):
+        findings.append(f"{entry.eid} is a blocking open question")
 
     return ReadinessResult(verdict=INCOMPLETE if findings else READY, findings=findings)
 
 
 def _is_true(value: Any) -> bool:
     return value is True
+
+
+def _blocking_open(entries: list[Entry]) -> list[Entry]:
+    """Open `Q` entries marked `blocking` and not yet `resolved` — the §4
+    blocking-open-question clause. Shared by `render_brief`'s GC-10 counters
+    and `readiness`'s verdict so the rule is expressed once, not twice."""
+    return [
+        e
+        for e in entries
+        if e.prefix == "Q"
+        and not _is_true(e.fields.get("resolved"))
+        and _is_true(e.fields.get("blocking"))
+    ]
 
 
 def _format_field_value(value: Any) -> str:
@@ -268,9 +277,7 @@ def render_brief(
     open_questions = [
         e for e in entries if e.prefix == "Q" and not _is_true(e.fields.get("resolved"))
     ]
-    blocking_open_questions = [
-        e for e in open_questions if _is_true(e.fields.get("blocking"))
-    ]
+    blocking_open_questions = _blocking_open(entries)
     conflicts = [
         e for e in entries if e.prefix == "X" and e.fields.get("status") == "open"
     ]

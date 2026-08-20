@@ -2,8 +2,10 @@
 
 import json
 
+from discovery import render
 from discovery.protocol import (
     ANSWER_CONFLICT,
+    INCOMPLETE,
     NO_TARGET_QUESTION,
     Envelope,
     exit_code,
@@ -43,6 +45,14 @@ class TestEnvelopeConstructors:
     def test_constants_are_the_documented_reason_strings(self):
         assert NO_TARGET_QUESTION == "no_target_question"
         assert ANSWER_CONFLICT == "answer_conflict"
+
+    def test_incomplete_literal_matches_render_module(self):
+        """`protocol` must not import `render` (layering), so the two
+        `INCOMPLETE` literals are duplicated by hand. If they ever diverged,
+        `exit_code` would return 0 for a thin brief — precisely the bug this
+        branch's readiness axis exists to remove. A test may import both
+        modules; the modules themselves may not import each other."""
+        assert INCOMPLETE == render.INCOMPLETE
 
 
 class TestEnvelopeToJson:

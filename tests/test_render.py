@@ -368,6 +368,27 @@ class TestFindingsRendering:
 
 
 class TestTracesTypeOnRead:
+    def test_missing_traces_on_an_fr_is_a_finding_not_an_error(self):
+        """A `traces` key that is simply absent (never a payload.py concern —
+        that module refuses an *explicit* null, see test_payload.py) reads as
+        "no trace" and surfaces as a readiness finding, not an exception."""
+        events = [
+            answer(
+                "customer.functions.01",
+                "product",
+                "entries:\n"
+                "  - id: G-01\n"
+                "    body: a goal\n"
+                "  - id: FR-01\n"
+                "    body: a function\n",
+            )
+        ]
+
+        result = readiness(events, "customer")
+
+        assert result.verdict == "incomplete"
+        assert any("FR-01" in f for f in result.findings)
+
     def test_string_traces_raise_instead_of_yielding_a_false_verdict(self):
         events = [
             answer(

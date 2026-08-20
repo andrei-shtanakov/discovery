@@ -110,3 +110,20 @@ class TestTracesType:
         )
         payload = parse_payload(raw)
         assert payload.entries[0].eid == "FR-01"
+
+    def test_explicit_null_traces_is_refused(self):
+        """An explicit YAML null is ambiguous (a scalar "not yet set" or an
+        empty list?) and is refused, distinct from a `traces` key that is
+        simply absent (see `render`'s missing-traces test: that renders as
+        a readiness finding, never an error)."""
+        raw = (
+            "text: an answer\n"
+            "entries:\n"
+            "  - id: FR-01\n"
+            "    body: a function\n"
+            "    traces:\n"
+        )
+        with pytest.raises(PayloadInvalid) as exc:
+            parse_payload(raw)
+        assert "traces" in str(exc.value)
+        assert "FR-01" in str(exc.value)

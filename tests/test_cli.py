@@ -291,6 +291,7 @@ class TestUnknownSession:
         assert code == 1
         assert envelope["lifecycle"] == "unknown"
         assert envelope["gate"] == "unknown"
+        assert envelope["readiness"] == "unknown"
         assert envelope["operation"]["status"] == "unknown"
 
     def test_answer_of_unknown_session_is_exit_1(self, capsys, monkeypatch, tmp_path):
@@ -314,6 +315,7 @@ class TestUnknownSession:
 
         assert code == 1
         assert envelope["lifecycle"] == "unknown"
+        assert envelope["readiness"] == "unknown"
 
     def test_brief_of_unknown_session_is_exit_1(self, capsys, monkeypatch, tmp_path):
         monkeypatch.setenv("DISCOVERY_HOME", str(tmp_path / "home"))
@@ -326,6 +328,7 @@ class TestUnknownSession:
 
         assert code == 1
         assert envelope["lifecycle"] == "unknown"
+        assert envelope["readiness"] == "unknown"
 
 
 class TestSessionLayout:

@@ -54,6 +54,11 @@ def render_and_gate(
         findings=[str(f) for f in real_findings],
     )
     pass_2_findings = check(final_text, base_dir=base_dir)
+    # `readiness()` is evaluated three times per call here (once inside each
+    # of the two `render_brief` passes above, once directly on the next
+    # line), each re-parsing every answer payload's YAML. Safe only because
+    # `readiness` is a pure function of `(events, frame)` — the three results
+    # cannot disagree. Keep it that way; do not let it grow hidden state.
     verdict = readiness(events, header.frame)
     return GateResult(
         status=status,

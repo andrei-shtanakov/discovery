@@ -115,12 +115,12 @@ def _status_envelope(
     lifecycle = compute_lifecycle(events, source, header.frame)
     result = render_and_gate(header, events, _session_dir(session_id))
     return protocol.ok(
-        lifecycle,
-        result.status,
-        result.readiness,
-        next_action,
-        result.findings,
-        result.readiness_findings,
+        lifecycle=lifecycle,
+        gate=result.status,
+        readiness=result.readiness,
+        next_action=next_action,
+        findings=result.findings,
+        readiness_findings=result.readiness_findings,
     )
 
 
@@ -176,13 +176,13 @@ def _refuse(
     """A refusal envelope built from the current, unwritten-to journal state."""
     envelope = _status_envelope(journal, header, source, session_id)
     return protocol.refused(
-        reason,
-        envelope.lifecycle,
-        envelope.gate,
-        envelope.readiness,
-        envelope.next_action,
-        envelope.findings,
-        envelope.readiness_findings,
+        reason=reason,
+        lifecycle=envelope.lifecycle,
+        gate=envelope.gate,
+        readiness=envelope.readiness,
+        next_action=envelope.next_action,
+        findings=envelope.findings,
+        readiness_findings=envelope.readiness_findings,
     )
 
 
@@ -266,12 +266,12 @@ def cmd_brief(args: argparse.Namespace) -> int:
     )
     return _emit(
         protocol.ok(
-            lifecycle,
-            result.status,
-            result.readiness,
-            next_action,
-            result.findings,
-            result.readiness_findings,
+            lifecycle=lifecycle,
+            gate=result.status,
+            readiness=result.readiness,
+            next_action=next_action,
+            findings=result.findings,
+            readiness_findings=result.readiness_findings,
         )
     )
 
