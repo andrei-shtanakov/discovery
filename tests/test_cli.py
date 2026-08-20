@@ -25,7 +25,15 @@ from discovery import cli
 from discovery.bank import BankQuestionSource
 from discovery.questions import Question, StaticQuestionSource
 
-ENVELOPE_KEYS = {"lifecycle", "gate", "next_action", "findings", "operation"}
+ENVELOPE_KEYS = {
+    "lifecycle",
+    "gate",
+    "readiness",
+    "next_action",
+    "findings",
+    "readiness_findings",
+    "operation",
+}
 ONE_QUESTION = {"customer": [Question("customer.g.01", "goals", "What problem?")]}
 
 
@@ -214,6 +222,8 @@ class TestAnswerConflict:
         }
         assert envelope["lifecycle"] != "unknown"
         assert envelope["gate"] != "unknown"
+        assert envelope["readiness"] != "unknown"
+        assert envelope["readiness_findings"] != []
         assert after == before
 
 

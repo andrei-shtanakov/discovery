@@ -114,7 +114,14 @@ def _status_envelope(
     events = journal.events()
     lifecycle = compute_lifecycle(events, source, header.frame)
     result = render_and_gate(header, events, _session_dir(session_id))
-    return protocol.ok(lifecycle, result.status, next_action, result.findings)
+    return protocol.ok(
+        lifecycle,
+        result.status,
+        result.readiness,
+        next_action,
+        result.findings,
+        result.readiness_findings,
+    )
 
 
 def _emit(envelope: Envelope) -> int:
@@ -172,8 +179,10 @@ def _refuse(
         reason,
         envelope.lifecycle,
         envelope.gate,
+        envelope.readiness,
         envelope.next_action,
         envelope.findings,
+        envelope.readiness_findings,
     )
 
 
@@ -255,7 +264,16 @@ def cmd_brief(args: argparse.Namespace) -> int:
         if lifecycle != AWAITING_INPUT
         else _issue_if_needed(journal, session.header, source)
     )
-    return _emit(protocol.ok(lifecycle, result.status, next_action, result.findings))
+    return _emit(
+        protocol.ok(
+            lifecycle,
+            result.status,
+            result.readiness,
+            next_action,
+            result.findings,
+            result.readiness_findings,
+        )
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
