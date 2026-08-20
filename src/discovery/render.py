@@ -17,6 +17,7 @@ from typing import Any, Protocol
 import yaml
 
 from discovery.contract.gate_check import FRAMES
+from discovery.payload import PayloadInvalid
 
 # Section headings follow the contract's §2 table, not this module's taste:
 # `J` is "Jobs-to-be-done" and `X` is "Stakeholder Conflicts" there, and a brief
@@ -126,14 +127,29 @@ def _coverage(entries: list[Entry], frame: str) -> dict[str, str]:
     }
 
 
+def _traces_of(entry: Entry) -> list[str]:
+    """The entry's `traces` as ids, refusing any other type.
+
+    A string is not a one-element list: iterating `"[J-02, G-01]"` yields
+    characters, two of which survive the G/J prefix filter and match no id,
+    so the old code answered `False` where it knew nothing. §7 forbids that
+    trade — an undeterminable axis is `unknown`, never a guess.
+    """
+    raw = entry.fields.get("traces")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise PayloadInvalid(
+            f"{entry.eid}: 'traces' must be a list, got {type(raw).__name__}: {raw!r}"
+        )
+    return [str(t) for t in raw]
+
+
 def _fr_all_traced(entries: list[Entry]) -> bool:
     """Every FR entry traces to at least one existing G/J entry (GC-06 mirror)."""
     ids = {e.eid for e in entries}
-    fr_entries = [e for e in entries if e.prefix == "FR"]
-    if not fr_entries:
-        return True
-    for entry in fr_entries:
-        targets = [str(t) for t in (entry.fields.get("traces") or [])]
+    for entry in (e for e in entries if e.prefix == "FR"):
+        targets = _traces_of(entry)
         matched = [t for t in targets if t.split("-", 1)[0] in ("G", "J")]
         if not matched or any(t not in ids for t in matched):
             return False
@@ -141,9 +157,17 @@ def _fr_all_traced(entries: list[Entry]) -> bool:
 
 
 def _gate_passed(coverage: dict[str, str], entries: list[Entry], frame: str) -> bool:
-    """`gate_passed` formula (contract §4), mirrored rather than predicted."""
+    """`gate_passed` formula (contract §4), mirrored rather than predicted.
+
+    `_fr_all_traced` is evaluated unconditionally, not chained with `and`
+    after `required_covered`: a malformed `traces` field must be refused
+    (`PayloadInvalid`) even when other coverage is already missing — a
+    short-circuit here would let `_traces_of` skip a value it cannot read,
+    which is exactly the silent-guess §7 forbids.
+    """
     frame_def = FRAMES[frame]
     required_covered = all(coverage[key] == "covered" for key in frame_def["required"])
+    fr_all_traced = _fr_all_traced(entries)
     blocking = sum(
         1
         for e in entries
@@ -151,7 +175,7 @@ def _gate_passed(coverage: dict[str, str], entries: list[Entry], frame: str) -> 
         and not _is_true(e.fields.get("resolved"))
         and _is_true(e.fields.get("blocking"))
     )
-    return required_covered and _fr_all_traced(entries) and blocking == 0
+    return required_covered and fr_all_traced and blocking == 0
 
 
 def _is_true(value: Any) -> bool:

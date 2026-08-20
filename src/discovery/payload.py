@@ -15,6 +15,13 @@ import yaml
 
 RESERVED = {"id", "body"}
 ID_RE = re.compile(r"^[A-Z]+-\d+$")
+# Deliberately stricter than the vendored linter's `traces_to` handling
+# (gate_check.py:252-258 normalises a bare string to a one-element list):
+# normalising an entry's `traces` the same way would turn `'[J-02, G-01]'`
+# into one bogus target and report "no trace" for an entry the operator did
+# trace. Refusing instead of guessing is the point (§7) — do not "fix" this
+# asymmetry by normalising here too.
+LIST_FIELDS = {"traces"}
 
 
 class PayloadInvalid(Exception):
@@ -46,6 +53,12 @@ def _parse_entry(item: Any) -> Entry:
     if not ID_RE.match(eid):
         raise PayloadInvalid(f"malformed entry id: {eid!r}")
     body = str(item.get("body", ""))
+    for key, value in item.items():
+        if key in LIST_FIELDS and not isinstance(value, list):
+            raise PayloadInvalid(
+                f"{eid}: {key!r} must be a YAML list, got "
+                f"{type(value).__name__}: {value!r}"
+            )
     fields = {k: str(v) for k, v in item.items() if k not in RESERVED}
     return Entry(eid=eid, body=body, fields=fields)
 

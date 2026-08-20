@@ -39,7 +39,7 @@ text: hi
 entries:
   - id: FR-01
     body: retry a timed-out courier call
-    traces: G-01
+    owner_role: product
     Priority: Must
     Acceptance: a timed-out call is retried twice before the order is failed
 """
@@ -49,7 +49,7 @@ entries:
     assert "id" not in entry.fields
     assert "body" not in entry.fields
     assert entry.fields == {
-        "traces": "G-01",
+        "owner_role": "product",
         "Priority": "Must",
         "Acceptance": ("a timed-out call is retried twice before the order is failed"),
     }
@@ -84,3 +84,29 @@ def test_null_entries_is_treated_as_empty():
 def test_non_list_entries_is_invalid():
     with pytest.raises(PayloadInvalid):
         parse_payload("text: hi\nentries: 5\n")
+
+
+class TestTracesType:
+    def test_string_traces_are_refused(self):
+        raw = (
+            "text: an answer\n"
+            "entries:\n"
+            "  - id: FR-01\n"
+            "    body: a function\n"
+            "    traces: '[J-02, G-01]'\n"
+        )
+        with pytest.raises(PayloadInvalid) as exc:
+            parse_payload(raw)
+        assert "traces" in str(exc.value)
+        assert "FR-01" in str(exc.value)
+
+    def test_list_traces_are_accepted(self):
+        raw = (
+            "text: an answer\n"
+            "entries:\n"
+            "  - id: FR-01\n"
+            "    body: a function\n"
+            "    traces: [J-02, G-01]\n"
+        )
+        payload = parse_payload(raw)
+        assert payload.entries[0].eid == "FR-01"

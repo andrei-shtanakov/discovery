@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass, field
 
+import pytest
 import yaml
 
+from discovery.payload import PayloadInvalid
 from discovery.render import render_brief
 
 
@@ -338,3 +340,22 @@ class TestFindingsRendering:
         assert "gate findings" not in render_brief(
             CUSTOMER, events, "pending", findings=[]
         )
+
+
+class TestTracesTypeOnRead:
+    def test_string_traces_raise_instead_of_yielding_a_false_verdict(self):
+        events = [
+            answer(
+                "customer.functions.01",
+                "product",
+                "entries:\n"
+                "  - id: G-01\n"
+                "    body: a goal\n"
+                "  - id: FR-01\n"
+                "    body: a function\n"
+                "    traces: '[G-01]'\n",
+            )
+        ]
+        with pytest.raises(PayloadInvalid) as exc:
+            render_brief(CUSTOMER, events, validation="pending")
+        assert "FR-01" in str(exc.value)

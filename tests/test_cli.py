@@ -610,3 +610,31 @@ class TestArgumentValidation:
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["start", "--frame", "nope", "--target", "org/repo"])
         assert exc_info.value.code == 2
+
+
+class TestMalformedTracesInJournal:
+    def test_status_reports_unknown_and_exits_1(self, capsys, monkeypatch, tmp_path):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        cli._journal(session_id).append(
+            {
+                "event": "answer_recorded",
+                "question_id": "customer.g.01",
+                "participant_role": "customer",
+                "answer_id": "sha256:legacy",
+                "payload": (
+                    "text: an answer\n"
+                    "entries:\n"
+                    "  - id: G-01\n"
+                    "    body: a goal\n"
+                    "  - id: FR-01\n"
+                    "    body: a function\n"
+                    "    traces: '[G-01]'\n"
+                ),
+            }
+        )
+
+        code, envelope = _run(capsys, ["status", "--session", session_id])
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert "traces" in envelope["operation"]["reason"]
