@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from discovery.payload import PayloadInvalid
-from discovery.render import render_brief
+from discovery.render import readiness, render_brief
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,31 @@ def answer(question_id, role, payload):
 
 
 CUSTOMER = Header(frame="customer")
+
+_ALL_REQUIRED_COVERED = (
+    "entries:\n"
+    "  - id: G-01\n"
+    "    body: a goal\n"
+    "  - id: P-01\n"
+    "    body: a persona\n"
+    "  - id: J-01\n"
+    "    body: a job\n"
+    "  - id: FR-01\n"
+    "    body: a function\n"
+    "    Priority: Must\n"
+    "    Acceptance: exports complete within 5s\n"
+    "    traces: [G-01]\n"
+    "  - id: NFR-01\n"
+    "    body: a non-functional requirement\n"
+    "    Acceptance: yes\n"
+    "  - id: CON-01\n"
+    "    body: a constraint\n"
+    "  - id: M-01\n"
+    "    body: a success metric\n"
+    "    traces: [G-01]\n"
+    "  - id: OUT-01\n"
+    "    body: an out-of-scope item\n"
+)
 
 
 def _frontmatter(text: str) -> dict:
@@ -359,3 +384,55 @@ class TestTracesTypeOnRead:
         with pytest.raises(PayloadInvalid) as exc:
             render_brief(CUSTOMER, events, validation="pending")
         assert "FR-01" in str(exc.value)
+
+
+class TestReadiness:
+    def test_empty_transcript_is_incomplete_and_names_every_required_topic(self):
+        result = readiness([], "customer")
+
+        assert result.verdict == "incomplete"
+        assert result.gate_passed is False
+        assert len(result.findings) == 8
+        assert any("goals" in f for f in result.findings)
+        assert any("out_of_scope" in f for f in result.findings)
+
+    def test_full_customer_brief_is_ready_with_no_findings(self):
+        result = readiness([answer("q", "product", _ALL_REQUIRED_COVERED)], "customer")
+
+        assert result.verdict == "ready"
+        assert result.gate_passed is True
+        assert result.findings == []
+
+    def test_untraced_fr_is_named_by_id(self):
+        payload = _ALL_REQUIRED_COVERED.replace("    traces: [G-01]\n", "", 1)
+        result = readiness([answer("q", "product", payload)], "customer")
+
+        assert result.verdict == "incomplete"
+        assert any("FR-01" in f for f in result.findings)
+
+    def test_blocking_open_question_is_named_by_id(self):
+        payload = _ALL_REQUIRED_COVERED + (
+            "  - id: Q-01\n"
+            "    body: an unresolved question\n"
+            "    owner_role: product\n"
+            "    blocking: true\n"
+        )
+        result = readiness([answer("q", "product", payload)], "customer")
+
+        assert result.verdict == "incomplete"
+        assert any("Q-01" in f for f in result.findings)
+
+    def test_findings_are_deterministic_across_calls(self):
+        events = [answer("q", "product", "entries:\n  - id: G-01\n    body: a goal\n")]
+
+        assert readiness(events, "customer").findings == (
+            readiness(events, "customer").findings
+        )
+
+    def test_frontmatter_gate_passed_equals_the_readiness_verdict(self):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        meta = _frontmatter(render_brief(CUSTOMER, events, validation="pending"))
+
+        assert (
+            meta["coverage"]["gate_passed"] is readiness(events, "customer").gate_passed
+        )

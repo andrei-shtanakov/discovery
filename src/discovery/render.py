@@ -145,37 +145,58 @@ def _traces_of(entry: Entry) -> list[str]:
     return [str(t) for t in raw]
 
 
-def _fr_all_traced(entries: list[Entry]) -> bool:
-    """Every FR entry traces to at least one existing G/J entry (GC-06 mirror)."""
+READY = "ready"
+INCOMPLETE = "incomplete"
+
+
+@dataclass(frozen=True)
+class ReadinessResult:
+    """The §4 coverage-gate verdict plus the clauses that failed it.
+
+    The one source of both the brief's `gate_passed` and the protocol's
+    `readiness` axis (§6, §7): a caller that needs the verdict receives this
+    object, never a second evaluation of the formula.
+    """
+
+    verdict: str
+    findings: list[str]
+
+    @property
+    def gate_passed(self) -> bool:
+        return self.verdict == READY
+
+
+def readiness(events: list[dict], frame: str) -> ReadinessResult:
+    """`gate_passed` (contract §4), mirrored rather than predicted, with the
+    failed clauses named in a deterministic order: uncovered required topics
+    in frame order, then untraced FRs and blocking open questions in answer
+    order."""
+    entries = _entries(events)
+    coverage = _coverage(entries, frame)
     ids = {e.eid for e in entries}
-    for entry in (e for e in entries if e.prefix == "FR"):
+    findings: list[str] = []
+
+    for key in FRAMES[frame]["required"]:
+        if coverage.get(key) != "covered":
+            findings.append(f"required topic {key!r} is not covered")
+
+    for entry in entries:
+        if entry.prefix != "FR":
+            continue
         targets = _traces_of(entry)
         matched = [t for t in targets if t.split("-", 1)[0] in ("G", "J")]
         if not matched or any(t not in ids for t in matched):
-            return False
-    return True
+            findings.append(f"{entry.eid} has no trace to an existing G/J entry")
 
+    for entry in entries:
+        if (
+            entry.prefix == "Q"
+            and not _is_true(entry.fields.get("resolved"))
+            and _is_true(entry.fields.get("blocking"))
+        ):
+            findings.append(f"{entry.eid} is a blocking open question")
 
-def _gate_passed(coverage: dict[str, str], entries: list[Entry], frame: str) -> bool:
-    """`gate_passed` formula (contract §4), mirrored rather than predicted.
-
-    `_fr_all_traced` is evaluated unconditionally, not chained with `and`
-    after `required_covered`: a malformed `traces` field must be refused
-    (`PayloadInvalid`) even when other coverage is already missing — a
-    short-circuit here would let `_traces_of` skip a value it cannot read,
-    which is exactly the silent-guess §7 forbids.
-    """
-    frame_def = FRAMES[frame]
-    required_covered = all(coverage[key] == "covered" for key in frame_def["required"])
-    fr_all_traced = _fr_all_traced(entries)
-    blocking = sum(
-        1
-        for e in entries
-        if e.prefix == "Q"
-        and not _is_true(e.fields.get("resolved"))
-        and _is_true(e.fields.get("blocking"))
-    )
-    return required_covered and fr_all_traced and blocking == 0
+    return ReadinessResult(verdict=INCOMPLETE if findings else READY, findings=findings)
 
 
 def _is_true(value: Any) -> bool:
@@ -260,7 +281,10 @@ def render_brief(
         "generated_at": header.created_at,
         "validation": validation,
         "interview": {"frame": frame, "sessions": _sessions(events)},
-        "coverage": {**coverage, "gate_passed": _gate_passed(coverage, entries, frame)},
+        "coverage": {
+            **coverage,
+            "gate_passed": readiness(events, frame).gate_passed,
+        },
         "open_questions": len(open_questions),
         "blocking_open_questions": len(blocking_open_questions),
         "conflicts": len(conflicts),
