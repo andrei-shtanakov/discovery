@@ -20,8 +20,10 @@ line-length = 88
 # per-file-ignores действует только на `ruff check`, а `ruff format` про него
 # не знает и переписал бы файл. Проверено боем 2026-08-19: red-чекпойнт
 # отказался замораживать тест, потому что `format --check` был красным на
-# вендоренном линтере.
-extend-exclude = ["src/discovery/contract/gate_check.py"]
+# вендоренном линтере. Иллюстративный python внутри прозы plan/spec-доков
+# под docs/ — тоже не шипуемый код: его отступ показывает точку вставки в
+# существующую функцию, а переформатирование это разрушает.
+extend-exclude = ["src/discovery/contract/gate_check.py", "docs/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
