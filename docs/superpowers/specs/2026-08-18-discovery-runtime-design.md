@@ -166,10 +166,14 @@ entries:
     body: cut order loss from courier timeouts
   - id: FR-01
     body: retry a timed-out courier call
-    traces: G-01
+    traces: [G-01]
     Priority: Must
     Acceptance: a timed-out call is retried twice before the order is failed
 ```
+
+`traces` is always a YAML list; a scalar is refused at intake, because a quoted
+`'[J-02, G-01]'` cannot be told apart from a single id and the linter's body
+parser recognises only the bracket form.
 
 **Answers target a question, not a key.** `answer` takes `--question <id>`; with
 it omitted the target is `next_action.question_id`, and the command refuses if
