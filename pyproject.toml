@@ -6,6 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["pyyaml>=6.0"]
 
+# Стадия задумана вызываемой прогоном, поэтому у неё есть имя, а не путь к
+# модулю. Обёртка console_scripts делает `sys.exit(main())`, так что коды
+# выхода §7 доходят до вызывающего без обёртки-шелла.
+[project.scripts]
+discovery = "discovery.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
