@@ -152,11 +152,7 @@ def _coverage(
     prefixes_present = {e.prefix for e in entries}
     return {
         key: "covered"
-        if (
-            prefix in prefixes_present
-            if prefix is not None
-            else key in answered_keys
-        )
+        if (prefix in prefixes_present if prefix is not None else key in answered_keys)
         else "missing"
         for key, prefix in section_map.items()
     }
@@ -209,9 +205,7 @@ def readiness(events: list[dict], frame: str) -> ReadinessResult:
     transcript into entries uses `_readiness_of` instead, so the payload
     YAML is parsed once per render pass rather than twice.
     """
-    return _readiness_of(
-        _entries(events), frame, _answered_coverage_keys(events)
-    )
+    return _readiness_of(_entries(events), frame, _answered_coverage_keys(events))
 
 
 def _readiness_of(
@@ -345,9 +339,7 @@ def render_brief(
             **coverage,
             # `entries` is already parsed here; going through the
             # events-level `readiness()` would re-parse every payload.
-            "gate_passed": _readiness_of(
-                entries, frame, answered_keys
-            ).gate_passed,
+            "gate_passed": _readiness_of(entries, frame, answered_keys).gate_passed,
         },
         "open_questions": len(open_questions),
         "blocking_open_questions": len(blocking_open_questions),
