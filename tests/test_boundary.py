@@ -145,6 +145,34 @@ class TestForbiddenImportWalk:
         assert forbidden_imports_in(sample) == {"urllib"}
 
 
+def _discovery_imports_in(path: Path) -> set[str]:
+    """Root `discovery.*` modules imported by the file at `path`."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            "discovery."
+        ):
+            found.add(node.module)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("discovery.") and alias.name != "discovery":
+                    found.add(alias.name)
+    return found
+
+
+class TestProtocolIsALeaf:
+    """`protocol.py` must stay importable with no `discovery.*` dependency —
+    load-bearing for the layering argument (M1/protocol.py module docstring):
+    other modules compare wire literals against it rather than importing it
+    for behaviour. Previously asserted nowhere; this makes it mechanical."""
+
+    def test_protocol_imports_no_discovery_module(self):
+        protocol_path = CORE_ROOT / "protocol.py"
+
+        assert _discovery_imports_in(protocol_path) == set()
+
+
 REQUIRED_QUESTIONS = {
     "customer": [
         Question("customer.g.01", "goals", "What problem?"),

@@ -20,20 +20,27 @@ class TestExitCodePriorityRed:
         from discovery.protocol import Envelope, exit_code, ok, refused, unknown
 
         # ok(): operation is exactly {"status": "ok"}; to_json carries 5 keys.
-        ok_envelope = ok("complete", "pass", next_action={"kind": "none"}, findings=[])
+        ok_envelope = ok(
+            "complete", "pass", "ready", next_action={"kind": "none"}, findings=[]
+        )
         assert ok_envelope.operation == {"status": "ok"}
+        # Amended 2026-08-20: readiness axis and exit 11 added; key set is now seven.
         assert set(json.loads(ok_envelope.to_json()).keys()) == {
             "lifecycle",
             "gate",
+            "readiness",
             "next_action",
             "findings",
+            "readiness_findings",
             "operation",
         }
         assert exit_code(ok_envelope) == 0
 
         # refused(): axes carry the actual caller-supplied values, never
         # defaulted to "unknown"; operation carries the reason.
-        refused_envelope = refused("answer_conflict", "awaiting_input", "fail")
+        refused_envelope = refused(
+            "answer_conflict", "awaiting_input", "fail", "incomplete"
+        )
         assert refused_envelope.operation == {
             "status": "refused",
             "reason": "answer_conflict",
@@ -57,13 +64,16 @@ class TestExitCodePriorityRed:
         pending_with_fail = Envelope(
             lifecycle="awaiting_input",
             gate="fail",
+            readiness="incomplete",
             findings=["GC-04: missing required topic"],
         )
         assert exit_code(pending_with_fail) == 20
         assert pending_with_fail.findings == ["GC-04: missing required topic"]
 
         # complete/fail ranks below awaiting_input but above complete/pass.
-        complete_fail = Envelope(lifecycle="complete", gate="fail")
+        complete_fail = Envelope(
+            lifecycle="complete", gate="fail", readiness="incomplete"
+        )
         assert exit_code(complete_fail) == 10
 
         # Adversarial case: an envelope whose operation.status is "unknown"
@@ -74,6 +84,7 @@ class TestExitCodePriorityRed:
         unknown_but_complete_fail = Envelope(
             lifecycle="complete",
             gate="fail",
+            readiness="incomplete",
             operation={"status": "unknown", "reason": "forced for test"},
         )
         assert exit_code(unknown_but_complete_fail) == 1

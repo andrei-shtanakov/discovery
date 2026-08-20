@@ -31,7 +31,7 @@ entries:
     body: cut order loss from courier timeouts
   - id: FR-01
     body: retry a timed-out courier call
-    traces: G-01
+    traces: [G-01]
     Priority: Must
     Acceptance: a timed-out call is retried twice before the order is failed
 """
@@ -45,9 +45,11 @@ entries:
 
         # REQ-015: fields other than id/body are preserved verbatim as str,
         # id/body themselves are excluded from fields.
+        # Amended 2026-08-20: `traces` must be a YAML list (payload.LIST_FIELDS).
+        # The REQ-015 example used a bare string, which is now refused at intake.
         fr_entry = payload.entries[1]
         assert fr_entry.fields == {
-            "traces": "G-01",
+            "traces": "['G-01']",
             "Priority": "Must",
             "Acceptance": (
                 "a timed-out call is retried twice before the order is failed"

@@ -118,7 +118,7 @@
       Тонкий бриф, валящий гейт, приёмкой не считается — интервью продолжается.
       Пока не пройдено, статус арки — `implementation complete, live acceptance
       pending`, **не** `accepted`.
-- [ ] Проецировать `gate_passed` в контракт статуса: `gate: pass` не значит «бриф полон» @owner:github:andrei-shtanakov @id:gate-passed-not-projected
+- [x] Проецировать `gate_passed` в контракт статуса: `gate: pass` не значит «бриф полон» @owner:github:andrei-shtanakov @id:gate-passed-not-projected
       Найдено живой приёмкой. Линтер проверяет, что бриф корректен и не врёт о себе:
       GC-04 требует присутствия ключей `coverage`, но не значения `covered`; GC-11 —
       совпадения `gate_passed` с вычисленным. Бриф из трёх записей честно пишет
@@ -126,7 +126,10 @@
       Настоящая защита от дырявого брифа (формула §4) в конверт не попадает вовсе, и
       вызывающий прогон не отличает полный бриф от трёх записей. Тот же класс, что
       чинила вся арка. Решение — правка §7: третья ось либо проекция в код выхода.
-- [ ] Строковое `traces` в payload молча рассыпается на символы @owner:github:andrei-shtanakov @id:traces-string-silently-wrong
+      **Сделано (PR #12).** Третья ось `readiness` (`ready`/`incomplete`) плюс
+      `readiness_findings` в конверте статуса, `render.readiness()` — единственное
+      место формулы §4, exit `11` для `readiness: incomplete`.
+- [x] Строковое `traces` в payload молча рассыпается на символы @owner:github:andrei-shtanakov @id:traces-string-silently-wrong
       `render._fr_all_traced` делает `[str(t) for t in (entry.fields.get("traces") or [])]`
       (`src/discovery/render.py:129`): `.get(... ) or []` спасает от отсутствующего поля,
       но не от неверного типа. Для списка итерация даёт элементы, для строки
@@ -134,6 +137,8 @@
       фильтр префикса, но не находятся среди id, функция возвращает `False`, и
       `gate_passed` становится ложным при полном покрытии. Неверный ответ вместо отказа:
       тип поля не проверяется. Чинить проверкой типа, а не документацией.
+      **Сделано (PR #12).** Тип `traces` проверяется и на приёме, и на чтении: строка
+      вместо списка получает отказ, а не тихую порчу до символов.
 - [ ] Назвать в документации вызова, что `exit 20` ломает `&&` @owner:github:andrei-shtanakov @id:exit-20-breaks-and
       `awaiting_input` — успешное состояние, но не нулевой код, поэтому `cmd_a && cmd_b`
       обрывается на нём. Для стадии, спроектированной pipeline-callable, это стоит
@@ -160,6 +165,17 @@
 - [ ] Политика приватности `interview.sessions`: хранить роли, не имена @owner:github:andrei-shtanakov @trigger:"первое интервью с сотрудником, а не с заказчиком" @id:employee-interview-privacy-policy
       ADR «Последствия» §5: провенанс «кто что сказал» при опросе сотрудников
       чувствителен, и решать это надо до пилота, а не после.
+- [ ] Engineer-фрейм не может достичь `readiness: ready`: `feasibility_review` рантайм не выводит @owner:github:andrei-shtanakov @id:feasibility-review-not-derived
+      В `FRAMES` у ключа префикс `None` («процесс, не секция»), а `render._coverage`
+      считает `covered` только по наличию записей с префиксом — значит для engineer этот
+      required-ключ всегда `missing` и `gate_passed` всегда `false`. Линтер трактует его
+      иначе: GC-05(engineer) считает `feasibility_review: covered` законным заявлением и
+      проверяет по делу — каждый Must-FR upstream-брифа упомянут по id в теле engineer-брифа.
+      До этого правила рантайм зеркалит §4 не полностью. Проекция оси не создала провал, а
+      сделала его видимым: он и сегодня лежит в `gate_passed: false`, но после exit 11
+      engineer-прогон перестанет возвращать 0 когда бы то ни было. Чинить зеркалированием
+      GC-05(engineer): резолвить upstream-бриф по `traces_to` от `base_dir` и считать ключ
+      `covered`, когда каждый upstream Must-FR упомянут в теле.
 
 ## Ожидания ответов соседей
 

@@ -83,17 +83,24 @@ class TestCustomerInterviewEndToEnd:
 
         code, envelope = drive(["status", "--session", session_id], capsys)
         assert envelope["lifecycle"] == "complete"
+        # The finding of 2026-08-19, pinned: every bank question was answered
+        # and the linter has nothing to object to, yet the brief is a stub.
+        # Before the readiness axis this returned exit 0.
+        assert envelope["gate"] == "pass"
+        assert envelope["readiness"] == "incomplete"
+        assert code == 11
+        assert any("goals" in f for f in envelope["readiness_findings"])
+        assert envelope["findings"] == []
 
         out_path = tmp_path / "brief.md"
-        drive(["brief", "--session", session_id, "--out", str(out_path)], capsys)
+        code, envelope = drive(
+            ["brief", "--session", session_id, "--out", str(out_path)], capsys
+        )
+        assert code == 11
         assert out_path.exists()
 
         findings = gate_check.check(
             out_path.read_text(encoding="utf-8"), base_dir=out_path.parent
         )
-        # gate: fail is an acceptable outcome here — the synthetic answers
-        # need not satisfy every substantive rule. What matters is that
-        # gate_check ran against the real brief and returned well-formed
-        # findings instead of raising or short-circuiting on empty input.
         assert isinstance(findings, list)
         assert all(f.level in {"error", "warning"} and f.message for f in findings)

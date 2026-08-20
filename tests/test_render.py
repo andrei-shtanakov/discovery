@@ -2,9 +2,12 @@
 
 from dataclasses import dataclass, field
 
+import pytest
 import yaml
 
-from discovery.render import render_brief
+from discovery import render as render_module
+from discovery.payload import PayloadInvalid
+from discovery.render import readiness, render_brief
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,31 @@ def answer(question_id, role, payload):
 
 
 CUSTOMER = Header(frame="customer")
+
+_ALL_REQUIRED_COVERED = (
+    "entries:\n"
+    "  - id: G-01\n"
+    "    body: a goal\n"
+    "  - id: P-01\n"
+    "    body: a persona\n"
+    "  - id: J-01\n"
+    "    body: a job\n"
+    "  - id: FR-01\n"
+    "    body: a function\n"
+    "    Priority: Must\n"
+    "    Acceptance: exports complete within 5s\n"
+    "    traces: [G-01]\n"
+    "  - id: NFR-01\n"
+    "    body: a non-functional requirement\n"
+    "    Acceptance: yes\n"
+    "  - id: CON-01\n"
+    "    body: a constraint\n"
+    "  - id: M-01\n"
+    "    body: a success metric\n"
+    "    traces: [G-01]\n"
+    "  - id: OUT-01\n"
+    "    body: an out-of-scope item\n"
+)
 
 
 def _frontmatter(text: str) -> dict:
@@ -337,4 +365,160 @@ class TestFindingsRendering:
         assert "gate findings" not in render_brief(CUSTOMER, events, "pending")
         assert "gate findings" not in render_brief(
             CUSTOMER, events, "pending", findings=[]
+        )
+
+
+class TestTracesTypeOnRead:
+    def test_missing_traces_on_an_fr_is_a_finding_not_an_error(self):
+        """A `traces` key that is simply absent (never a payload.py concern —
+        that module refuses an *explicit* null, see test_payload.py) reads as
+        "no trace" and surfaces as a readiness finding, not an exception."""
+        events = [
+            answer(
+                "customer.functions.01",
+                "product",
+                "entries:\n"
+                "  - id: G-01\n"
+                "    body: a goal\n"
+                "  - id: FR-01\n"
+                "    body: a function\n",
+            )
+        ]
+
+        result = readiness(events, "customer")
+
+        assert result.verdict == "incomplete"
+        assert any("FR-01" in f for f in result.findings)
+
+    def test_string_traces_raise_instead_of_yielding_a_false_verdict(self):
+        events = [
+            answer(
+                "customer.functions.01",
+                "product",
+                "entries:\n"
+                "  - id: G-01\n"
+                "    body: a goal\n"
+                "  - id: FR-01\n"
+                "    body: a function\n"
+                "    traces: '[G-01]'\n",
+            )
+        ]
+        with pytest.raises(PayloadInvalid) as exc:
+            render_brief(CUSTOMER, events, validation="pending")
+        assert "FR-01" in str(exc.value)
+
+
+class TestReadiness:
+    def test_empty_transcript_is_incomplete_and_names_every_required_topic(self):
+        result = readiness([], "customer")
+
+        assert result.verdict == "incomplete"
+        assert result.gate_passed is False
+        assert len(result.findings) == 8
+        assert any("goals" in f for f in result.findings)
+        assert any("out_of_scope" in f for f in result.findings)
+
+    def test_full_customer_brief_is_ready_with_no_findings(self):
+        result = readiness([answer("q", "product", _ALL_REQUIRED_COVERED)], "customer")
+
+        assert result.verdict == "ready"
+        assert result.gate_passed is True
+        assert result.findings == []
+
+    def test_untraced_fr_is_named_by_id(self):
+        payload = _ALL_REQUIRED_COVERED.replace("    traces: [G-01]\n", "", 1)
+        result = readiness([answer("q", "product", payload)], "customer")
+
+        assert result.verdict == "incomplete"
+        assert any("FR-01" in f for f in result.findings)
+
+    def test_blocking_open_question_is_named_by_id(self):
+        payload = _ALL_REQUIRED_COVERED + (
+            "  - id: Q-01\n"
+            "    body: an unresolved question\n"
+            "    owner_role: product\n"
+            "    blocking: true\n"
+        )
+        result = readiness([answer("q", "product", payload)], "customer")
+
+        assert result.verdict == "incomplete"
+        assert any("Q-01" in f for f in result.findings)
+
+    def test_findings_are_deterministic_across_calls(self):
+        events = [answer("q", "product", "entries:\n  - id: G-01\n    body: a goal\n")]
+
+        assert readiness(events, "customer").findings == (
+            readiness(events, "customer").findings
+        )
+
+    def test_frontmatter_gate_passed_equals_the_readiness_verdict(self):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        meta = _frontmatter(render_brief(CUSTOMER, events, validation="pending"))
+
+        assert (
+            meta["coverage"]["gate_passed"] is readiness(events, "customer").gate_passed
+        )
+
+    def test_engineer_frame_cannot_reach_ready_even_fully_populated(self):
+        """Pins a known limitation, tracked as @id:feasibility-review-not-derived.
+
+        `feasibility_review` is engineer's one required key with prefix
+        `None` ("process, not a section" — FRAMES["engineer"]), and
+        `_coverage` marks a key `covered` only when an entry's id-prefix
+        matches. That key is therefore always `missing`, so `readiness` is
+        always `incomplete` for the engineer frame, no matter how complete
+        the transcript — every engineer run exits 11, never 0. This test
+        exists so a future change to `_coverage` that silently fixes or
+        worsens this moves a test; when @id:feasibility-review-not-derived
+        (TODO.md) is fixed, delete this test.
+        """
+        payload = (
+            "entries:\n"
+            "  - id: S-01\n"
+            "    body: current system assessment\n"
+            "  - id: IF-01\n"
+            "    body: an interface\n"
+            "  - id: CON-01\n"
+            "    body: a constraint\n"
+            "  - id: AP-01\n"
+            "    body: an architecture preference\n"
+            "  - id: RK-01\n"
+            "    body: a risk\n"
+        )
+        result = readiness([answer("q", "engineer", payload)], "engineer")
+
+        assert result.verdict == "incomplete"
+        assert any("feasibility_review" in f for f in result.findings)
+
+
+class TestTranscriptParsedOnce:
+    """`render_brief` parses the transcript once per pass.
+
+    Raised by GitHub Copilot on PR #12: the §4 verdict used to be taken
+    through the events-level `readiness()`, which re-parsed every payload
+    the caller had just parsed. The formula still lives in one place —
+    `_readiness_of` — but the entry point that re-parses is now only for
+    callers who hold events rather than entries.
+    """
+
+    def test_render_brief_calls_entries_once(self, monkeypatch):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        calls = []
+        original = render_module._entries
+        monkeypatch.setattr(
+            render_module,
+            "_entries",
+            lambda ev: (calls.append(1), original(ev))[1],
+        )
+
+        render_brief(CUSTOMER, events, validation="pending")
+
+        assert len(calls) == 1
+
+    def test_events_and_entries_entry_points_agree(self):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        entries = render_module._entries(events)
+
+        assert readiness(events, "customer") == render_module._readiness_of(
+            entries, "customer"
         )

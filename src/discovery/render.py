@@ -17,6 +17,7 @@ from typing import Any, Protocol
 import yaml
 
 from discovery.contract.gate_check import FRAMES
+from discovery.payload import PayloadInvalid
 
 # Section headings follow the contract's §2 table, not this module's taste:
 # `J` is "Jobs-to-be-done" and `X` is "Stakeholder Conflicts" there, and a brief
@@ -118,6 +119,9 @@ def _coverage(entries: list[Entry], frame: str) -> dict[str, str]:
     frame_def = FRAMES[frame]
     section_map = {**frame_def["required"], **frame_def["optional"]}
     prefixes_present = {e.prefix for e in entries}
+    # engineer's required `feasibility_review` has prefix None ("process, not
+    # a section"), so this always reads "missing" — structurally unreachable
+    # until @id:feasibility-review-not-derived (TODO.md) is fixed.
     return {
         key: "covered"
         if prefix is not None and prefix in prefixes_present
@@ -126,36 +130,97 @@ def _coverage(entries: list[Entry], frame: str) -> dict[str, str]:
     }
 
 
-def _fr_all_traced(entries: list[Entry]) -> bool:
-    """Every FR entry traces to at least one existing G/J entry (GC-06 mirror)."""
+def _traces_of(entry: Entry) -> list[str]:
+    """The entry's `traces` as ids, refusing any other type.
+
+    A string is not a one-element list: iterating `"[J-02, G-01]"` yields
+    characters, two of which survive the G/J prefix filter and match no id,
+    so the old code answered `False` where it knew nothing. §7 forbids that
+    trade — an undeterminable axis is `unknown`, never a guess.
+    """
+    raw = entry.fields.get("traces")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise PayloadInvalid(
+            f"{entry.eid}: 'traces' must be a YAML list, got "
+            f"{type(raw).__name__}: {raw!r}"
+        )
+    return [str(t) for t in raw]
+
+
+READY = "ready"
+INCOMPLETE = "incomplete"
+
+
+@dataclass(frozen=True)
+class ReadinessResult:
+    """The §4 coverage-gate verdict plus the clauses that failed it.
+
+    The one source of both the brief's `gate_passed` and the protocol's
+    `readiness` axis (§6, §7): a caller that needs the verdict receives this
+    object, never a second evaluation of the formula.
+    """
+
+    verdict: str
+    findings: list[str]
+
+    @property
+    def gate_passed(self) -> bool:
+        return self.verdict == READY
+
+
+def readiness(events: list[dict], frame: str) -> ReadinessResult:
+    """`gate_passed` (contract §4), mirrored rather than predicted.
+
+    The events-level entry point. A caller that has already parsed the
+    transcript into entries uses `_readiness_of` instead, so the payload
+    YAML is parsed once per render pass rather than twice.
+    """
+    return _readiness_of(_entries(events), frame)
+
+
+def _readiness_of(entries: list[Entry], frame: str) -> ReadinessResult:
+    """The §4 formula over already-parsed entries, with the failed clauses
+    named in a deterministic order: uncovered required topics in frame
+    order, then untraced FRs and blocking open questions in answer order."""
+    coverage = _coverage(entries, frame)
     ids = {e.eid for e in entries}
-    fr_entries = [e for e in entries if e.prefix == "FR"]
-    if not fr_entries:
-        return True
-    for entry in fr_entries:
-        targets = [str(t) for t in (entry.fields.get("traces") or [])]
+    findings: list[str] = []
+
+    for key in FRAMES[frame]["required"]:
+        if coverage.get(key) != "covered":
+            findings.append(f"required topic {key!r} is not covered")
+
+    for entry in entries:
+        if entry.prefix != "FR":
+            continue
+        targets = _traces_of(entry)
         matched = [t for t in targets if t.split("-", 1)[0] in ("G", "J")]
         if not matched or any(t not in ids for t in matched):
-            return False
-    return True
+            findings.append(f"{entry.eid} has no trace to an existing G/J entry")
 
+    for entry in _blocking_open(entries):
+        findings.append(f"{entry.eid} is a blocking open question")
 
-def _gate_passed(coverage: dict[str, str], entries: list[Entry], frame: str) -> bool:
-    """`gate_passed` formula (contract §4), mirrored rather than predicted."""
-    frame_def = FRAMES[frame]
-    required_covered = all(coverage[key] == "covered" for key in frame_def["required"])
-    blocking = sum(
-        1
-        for e in entries
-        if e.prefix == "Q"
-        and not _is_true(e.fields.get("resolved"))
-        and _is_true(e.fields.get("blocking"))
-    )
-    return required_covered and _fr_all_traced(entries) and blocking == 0
+    return ReadinessResult(verdict=INCOMPLETE if findings else READY, findings=findings)
 
 
 def _is_true(value: Any) -> bool:
     return value is True
+
+
+def _blocking_open(entries: list[Entry]) -> list[Entry]:
+    """Open `Q` entries marked `blocking` and not yet `resolved` — the §4
+    blocking-open-question clause. Shared by `render_brief`'s GC-10 counters
+    and `readiness`'s verdict so the rule is expressed once, not twice."""
+    return [
+        e
+        for e in entries
+        if e.prefix == "Q"
+        and not _is_true(e.fields.get("resolved"))
+        and _is_true(e.fields.get("blocking"))
+    ]
 
 
 def _format_field_value(value: Any) -> str:
@@ -220,9 +285,7 @@ def render_brief(
     open_questions = [
         e for e in entries if e.prefix == "Q" and not _is_true(e.fields.get("resolved"))
     ]
-    blocking_open_questions = [
-        e for e in open_questions if _is_true(e.fields.get("blocking"))
-    ]
+    blocking_open_questions = _blocking_open(entries)
     conflicts = [
         e for e in entries if e.prefix == "X" and e.fields.get("status") == "open"
     ]
@@ -236,7 +299,12 @@ def render_brief(
         "generated_at": header.created_at,
         "validation": validation,
         "interview": {"frame": frame, "sessions": _sessions(events)},
-        "coverage": {**coverage, "gate_passed": _gate_passed(coverage, entries, frame)},
+        "coverage": {
+            **coverage,
+            # `entries` is already parsed here; going through the
+            # events-level `readiness()` would re-parse every payload.
+            "gate_passed": _readiness_of(entries, frame).gate_passed,
+        },
         "open_questions": len(open_questions),
         "blocking_open_questions": len(blocking_open_questions),
         "conflicts": len(conflicts),

@@ -166,10 +166,14 @@ entries:
     body: cut order loss from courier timeouts
   - id: FR-01
     body: retry a timed-out courier call
-    traces: G-01
+    traces: [G-01]
     Priority: Must
     Acceptance: a timed-out call is retried twice before the order is failed
 ```
+
+`traces` is always a YAML list; a scalar is refused at intake, because a quoted
+`'[J-02, G-01]'` cannot be told apart from a single id and the linter's body
+parser recognises only the bracket form.
 
 **Answers target a question, not a key.** `answer` takes `--question <id>`; with
 it omitted the target is `next_action.question_id`, and the command refuses if
@@ -221,9 +225,11 @@ evidence in the journal that a conversation is under way — evidence the bank
 cannot take back by going empty between two calls. Only the `complete` branch
 gains the precondition, because `complete` is the claim with nothing behind it.
 
-`complete` does **not** imply `gate: pass`. A conversation can end with thin
-answers that render empty sections and fail GC-05 — which is exactly why the two
-axes never collapse into one (§7).
+`complete` does **not** imply `gate: pass`, and neither implies
+`readiness: ready`. A conversation can end with thin answers that render empty
+sections and fail GC-05, or with answers so thin that nothing renders, the
+linter has nothing to object to, and the brief is still a stub — which is
+exactly why the three axes never collapse into one (§7).
 
 The brief is **derived**: re-rendered from the transcript, never edited in
 place. Three consequences pay for the choice — resume is a recomputation of
@@ -261,7 +267,12 @@ Only the second pass's result is accepted, and a dedicated assertion holds that
 the second pass is clean with respect to GC-15. The runtime mirrors the linter;
 it never anticipates it.
 
-## 7. Status protocol — two axes, one priority order
+The accepted result also carries the §4 readiness verdict and its diagnostics,
+taken from the same public function that supplies the frontmatter's
+`gate_passed` — never recomputed downstream, so the `readiness` axis of §7 and
+the document it describes cannot drift apart.
+
+## 7. Status protocol — three axes, one priority order
 
 Every command returns the same envelope — including when it refuses:
 
@@ -269,8 +280,10 @@ Every command returns the same envelope — including when it refuses:
 {
   "lifecycle": "awaiting_input | complete | unknown",
   "gate":      "pass | fail | unknown",
+  "readiness": "ready | incomplete | unknown",
   "next_action": {},
   "findings": [],
+  "readiness_findings": [],
   "operation": {
     "status": "ok | refused | unknown",
     "reason": "no_target_question | answer_conflict"
@@ -278,21 +291,63 @@ Every command returns the same envelope — including when it refuses:
 }
 ```
 
-`operation` describes the call; `lifecycle` and `gate` describe the session. A
-refusal does not blank them: at exit `2` the state was readable and left
-unchanged, so the axes carry the current computed values and the caller learns
+`operation` describes the call; `lifecycle`, `gate` and `readiness` describe the
+session. Each answers a different question, and none is derivable from the
+others:
+
+- `lifecycle` — is the conversation finished? A fold of the journal against the
+  question source (§5).
+- `gate` — does the linter accept the document? The mirror of the brief's own
+  `validation` (§6): the document is well-formed and does not lie about itself.
+- `readiness` — is the brief substantively complete? The §4 coverage-gate
+  formula: every required key `covered` with a non-empty section, every FR
+  traced to an existing G/J, zero blocking open questions.
+
+**Known limitation: the engineer frame cannot reach `readiness: ready`.** Its
+one required key with no id-prefix, `feasibility_review` ("process, not a
+section" — the frame's `FRAMES` entry), is never `covered` by the coverage
+formula above, which only recognises an entry whose id-prefix matches. Every
+engineer run therefore reports `readiness: incomplete` and exits `11`,
+regardless of how complete the transcript is. This is a disclosure, not a
+regression — the frontmatter's `gate_passed` was already `false` for every
+engineer brief before this axis existed, the envelope simply stopped
+contradicting it — and it is tracked as
+`@id:feasibility-review-not-derived` in `TODO.md`.
+
+The axis is a projection, never a second implementation: `readiness` and the
+frontmatter's `gate_passed` are one public function over the same events, so
+the envelope cannot disagree with the document it describes.
+
+`readiness` is deliberately not called `coverage`. `coverage` is already the
+frontmatter's per-topic map, and the formula this axis projects also fails on an
+untraced FR or a blocking open question — neither of which that map describes.
+
+`gate` and `readiness` are independent in both directions. A brief with full
+coverage fails the linter when an FR carries no `Priority` (GC-08). A brief of
+three entries passes it: GC-04 requires the `coverage` keys to be present, not
+to read `covered`, and GC-11 only requires the declared `gate_passed` to equal
+the computed one — which it honestly does, at `false`. Before this axis existed
+the second case returned `lifecycle: complete`, `gate: pass`, exit `0`, and no
+caller could tell a finished brief from a stub. Found by the live acceptance run
+(2026-08-19), not by any synthetic test: the existing tests reached
+`lifecycle: complete`, but none distinguished a lint-valid stub from a
+substantively ready brief.
+
+A refusal does not blank the axes: at exit `2` the state was readable and left
+unchanged, so all three carry the current computed values and the caller learns
 both what it asked for and where the session stands. Only exit `1` may report
 `unknown` axes.
 
 | code | meaning | priority |
 |---|---|---|
-| `1` | an axis could not be determined (`lifecycle` or `gate` is `unknown`), or the call itself decided nothing (`operation.status: unknown`) | highest |
+| `1` | an axis could not be determined (`lifecycle`, `gate` or `readiness` is `unknown`), or the call itself decided nothing (`operation.status: unknown`) | highest |
 | `2` | refused precondition: no target question, or a conflicting answer without `--supersede`; state readable and **unchanged** | |
 | `20` | `lifecycle: awaiting_input` (§5) | |
 | `10` | `lifecycle: complete`, `gate: fail` | |
-| `0` | `lifecycle: complete`, `gate: pass` | lowest |
+| `11` | `lifecycle: complete`, `gate: pass`, `readiness: incomplete` | |
+| `0` | `lifecycle: complete`, `gate: pass`, `readiness: ready` | lowest |
 
-Codes `0` / `10` / `20` project the two axes; `1` and `2` are outcomes of the
+Codes `0` / `10` / `11` / `20` project the axes; `1` and `2` are outcomes of the
 call itself.
 
 The priority is load-bearing: an incomplete transcript almost always also yields
@@ -302,18 +357,59 @@ cannot see that the brief is also defective, only that it is unfinished. `2` is
 kept distinct from `1` because a refusal is a known state, and folding it into
 "unknown" would make a retry look reasonable when it is not.
 
+`10` outranks `11` because an invalid document is repaired before a thin one —
+and because one of the rules that may have failed is GC-11 itself, the
+document's own claim about the very formula `readiness` projects. A verdict
+about completeness is only worth acting on once the document is known not to
+lie. `findings` are returned at `11` as they are at `20`: a caller must be able
+to see that a brief is both thin and, say, carrying a warning.
+
+An incomplete verdict carries deterministic readiness diagnostics in
+`readiness_findings`, identifying the failed clauses: uncovered required keys,
+FRs without a trace to an existing G/J, and blocking open questions. They come
+from the same public result that supplies `gate_passed` and `readiness`, and are
+never reconstructed by the protocol layer. They stay in their own key rather
+than joining `findings`: mixing linter errors with the reasons a brief is thin
+would blur the very boundary between `gate` and `readiness` that this section
+draws — and a lint-valid stub is precisely the case where `findings` is empty
+while the brief is unusable.
+
+`readiness` is reported at `20` as well, where `incomplete` is the expected
+mid-interview value and carries no verdict about the finished brief.
+
 The two triggers of `1` are not the same event, and the envelope keeps them
-apart. An unreadable journal collapses **both** axes and `operation` — nothing
-about the session is known. An empty question source collapses only
+apart. An unreadable journal collapses **all three** axes and `operation` —
+nothing about the session is known. An empty question source collapses only
 `lifecycle`: the session was read, the call succeeded (`operation.status: ok`),
-and `gate` is still computed from whatever the transcript renders. Folding the
-second case into the first would throw away a gate verdict the runtime actually
-holds, and the axes exist precisely so it does not have to.
+and `gate` and `readiness` are still computed from whatever the transcript
+renders. Folding the second case into the first would throw away verdicts the
+runtime actually holds, and the axes exist precisely so it does not have to.
+`readiness` collapses to `unknown` exactly when `gate` does — both are derived
+by the render/check pass over the journal, so no state can leave one known and
+the other not.
 
 `20` is the shape that makes the stage callable by a run: waiting is a state,
 not a failure and not a command. Unreadable state is `unknown` (`lifecycle`
 *and* exit `1`) and never renders as "nothing to wait for" — the tri-state rule
 already established by dispatcher's `merged` / `created`.
+
+**Rejected: automatically re-issuing questions on `readiness: incomplete`.**
+When the bank is exhausted and the brief remains incomplete, the runtime reports
+the failed readiness clauses and returns control; it does not manufacture
+another pending question.
+
+An incomplete verdict does not prove that asking a bank question again will
+produce new evidence. The missing clause may be an uncovered required key, an
+untraced FR, or a blocking open question, and those cases do not share a single
+mechanically correct re-ask target. Even where a related bank question exists,
+the runtime cannot distinguish a thin answer from a stakeholder who has no
+further answer to give, so automatic re-asking has no terminating condition.
+
+Waiting remains a state the runtime can prove: an issued question has no
+recorded answer. Readiness remains a deterministic property of the derived
+brief, but deciding whether its incompleteness warrants another conversation
+belongs to the human caller. This keeps `lifecycle` a pure function of the
+journal and question source as required by §5.
 
 CLI surface, four commands, all emitting the status above:
 
@@ -473,7 +569,9 @@ The live evidence, in order:
 1. `start` returns `awaiting_input`, exit `20`.
 2. The process exits; state survives.
 3. A **new** process runs `status`, then `answer`.
-4. The interview reaches `lifecycle: complete`, `gate: pass`, exit `0`.
+4. The interview reaches `lifecycle: complete`, `gate: pass`,
+   `readiness: ready`, exit `0` — for the **customer** frame. The engineer
+   frame cannot produce this outcome today (§7, known limitation).
 5. The brief is written to the permitted `brief_path` in the target repo.
 6. An independent invocation of the vendored gate confirms the clean result.
 7. A ledger ties together session id, transcript SHA-256, brief SHA-256, and the
