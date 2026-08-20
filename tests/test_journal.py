@@ -73,3 +73,60 @@ def test_corrupt_line_after_valid_record_raises_journal_unreadable(tmp_path):
 
     with pytest.raises(JournalUnreadable):
         journal.events()
+
+
+class TestEventShapeIsValidatedAtTheBoundary:
+    """A line that parses as JSON but lacks a field its readers index by is
+    unreadable, not merely odd.
+
+    Found by GitHub Copilot on PR #14. A `question_asked` without
+    `question_id` used to reach `lifecycle.issued()` and escape the CLI as a
+    `KeyError` traceback — with nothing on stdout, which breaks §7's promise
+    that every command emits the envelope. Validating at the loader covers
+    every reader at once; skipping the line instead would be fail-open,
+    since a dropped `question_asked` silently changes the lifecycle.
+    """
+
+    def test_question_asked_without_question_id_is_unreadable(self, tmp_path):
+        path = tmp_path / "journal.jsonl"
+        path.write_text(
+            '{"event": "question_asked", "coverage_key": "goals",'
+            ' "question_text": "why?"}\n',
+            encoding="utf-8",
+        )
+
+        with pytest.raises(JournalUnreadable) as exc:
+            Journal(path).events()
+        assert "question_id" in str(exc.value)
+
+    def test_answer_recorded_without_question_id_is_unreadable(self, tmp_path):
+        path = tmp_path / "journal.jsonl"
+        path.write_text('{"event": "answer_recorded", "payload": "x"}\n', "utf-8")
+
+        with pytest.raises(JournalUnreadable):
+            Journal(path).events()
+
+    def test_a_line_without_an_event_name_carries_no_requirement(self, tmp_path):
+        """Every reader selects on `event.get("event")`, so a line with no
+        kind is inert, not malformed. Validating it would reject journals
+        this repo's own tests append."""
+        path = tmp_path / "journal.jsonl"
+        path.write_text('{"question_id": "q"}\n', encoding="utf-8")
+
+        assert Journal(path).events() == [{"question_id": "q"}]
+
+    def test_a_non_object_line_is_unreadable(self, tmp_path):
+        path = tmp_path / "journal.jsonl"
+        path.write_text("[1, 2, 3]\n", encoding="utf-8")
+
+        with pytest.raises(JournalUnreadable):
+            Journal(path).events()
+
+    def test_an_unknown_event_kind_passes_through(self, tmp_path):
+        """Forward compatibility: a kind this version has no reader for
+        carries no indexing requirement, so it is not the loader's business
+        to reject it."""
+        path = tmp_path / "journal.jsonl"
+        path.write_text('{"event": "note_added", "text": "hello"}\n', "utf-8")
+
+        assert Journal(path).events() == [{"event": "note_added", "text": "hello"}]

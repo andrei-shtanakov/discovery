@@ -17,6 +17,17 @@ ANSWER_SUPERSEDED = "answer_superseded"
 SOURCE_PIN_CHANGED = "source_pin_changed"
 
 
+# The fields each event kind's readers index by name (`event["..."]`), so a
+# line missing one is unreadable rather than merely odd. Kept next to the
+# loader deliberately: this is a statement about what the *file* must
+# contain, not about what any one reader happens to want today.
+REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    QUESTION_ASKED: ("question_id", "coverage_key", "question_text"),
+    ANSWER_RECORDED: ("question_id",),
+    ANSWER_SUPERSEDED: ("question_id",),
+}
+
+
 class JournalUnreadable(Exception):
     """Raised when a journal line cannot be parsed as JSON."""
 
@@ -60,7 +71,16 @@ class Journal:
         """Return all events in append order.
 
         Raises ``JournalUnreadable`` on the first line that fails to parse
-        as JSON, rather than skipping it or returning a partial list.
+        as JSON *or* that parses into an event missing the fields its
+        readers index by, rather than skipping it or returning a partial
+        list. The journal is a file on disk and therefore untrusted input;
+        validating here means every reader — lifecycle, render, the CLI —
+        is covered by one boundary, and an unreadable journal reaches the
+        caller as `unknown` + exit 1 with an envelope, never as a traceback
+        with nothing on stdout.
+
+        Skipping a malformed line would be the fail-open alternative: a
+        dropped `question_asked` silently changes the computed lifecycle.
         """
         if not self._path.exists():
             return []
@@ -71,7 +91,28 @@ class Journal:
             if not line:
                 continue
             try:
-                result.append(json.loads(line))
+                event = json.loads(line)
             except json.JSONDecodeError as exc:
                 raise JournalUnreadable(f"{self._path}:{line_number}: {exc}") from exc
+            self._require_shape(event, line_number)
+            result.append(event)
         return result
+
+    def _require_shape(self, event: object, line_number: int) -> None:
+        """Reject an event that a reader would index into and fail on."""
+        if not isinstance(event, dict):
+            raise JournalUnreadable(
+                f"{self._path}:{line_number}: event is not an object"
+            )
+        # A line with no `event` name carries no reader and no requirement:
+        # every reader selects on `event.get("event")`, so such a line is
+        # inert rather than malformed. Only a kind that has readers indexing
+        # by name imposes anything.
+        kind = event.get("event")
+        for field_name in (
+            REQUIRED_FIELDS.get(kind, ()) if isinstance(kind, str) else ()
+        ):
+            if field_name not in event:
+                raise JournalUnreadable(
+                    f"{self._path}:{line_number}: {kind} has no {field_name!r}"
+                )
