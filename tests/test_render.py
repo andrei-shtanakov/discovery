@@ -30,6 +30,31 @@ def answer(question_id, role, payload):
     }
 
 
+def asked(question_id, coverage_key):
+    return {
+        "event": "question_asked",
+        "question_id": question_id,
+        "coverage_key": coverage_key,
+        "question_text": f"question for {coverage_key}?",
+        "source_pin": "pin-test",
+    }
+
+
+_ENGINEER_SECTIONS = (
+    "entries:\n"
+    "  - id: S-01\n"
+    "    body: current system assessment\n"
+    "  - id: IF-01\n"
+    "    body: an interface\n"
+    "  - id: CON-01\n"
+    "    body: a constraint\n"
+    "  - id: AP-01\n"
+    "    body: an architecture preference\n"
+    "  - id: RK-01\n"
+    "    body: a risk\n"
+)
+
+
 CUSTOMER = Header(frame="customer")
 
 _ALL_REQUIRED_COVERED = (
@@ -335,8 +360,16 @@ class TestGatePassed:
         assert meta["coverage"]["gate_passed"] is True
 
 
-class TestFindingsRendering:
-    def test_findings_render_as_a_trailing_html_comment_block(self):
+class TestNoEmbeddedDiagnostics:
+    """§6: the brief carries the data and the verdict, never the diagnostics.
+
+    Embedding them let a finding's own text satisfy the check that produced
+    it — GC-05 scans the whole document for each upstream Must-FR id, and
+    the finding naming FR-07 put "FR-07" into the document. The findings
+    belong to the run and travel in the envelope.
+    """
+
+    def test_the_rendered_brief_carries_no_diagnostics_block(self):
         events = [
             answer(
                 "customer.goals.01",
@@ -345,27 +378,17 @@ class TestFindingsRendering:
             )
         ]
 
-        text = render_brief(
-            CUSTOMER, events, "fail", findings=["GC-06 FR-01: no traces"]
-        )
+        for validation in ("pending", "pass", "fail"):
+            text = render_brief(CUSTOMER, events, validation)
+            assert "gate findings" not in text
+            assert "## Gate findings" not in text
+            assert "<!--" not in text
 
-        assert "<!-- gate findings:" in text
-        assert "- GC-06 FR-01: no traces" in text
-        assert text.rstrip().endswith("-->")
-
-    def test_no_findings_block_when_findings_is_none_or_empty(self):
-        events = [
-            answer(
-                "customer.goals.01",
-                "product",
-                "entries:\n  - id: G-01\n    body: reach 10k users\n",
-            )
-        ]
-
-        assert "gate findings" not in render_brief(CUSTOMER, events, "pending")
-        assert "gate findings" not in render_brief(
-            CUSTOMER, events, "pending", findings=[]
-        )
+    def test_render_brief_takes_no_findings_argument(self):
+        """The parameter is gone, not merely unused: a caller that still
+        passes diagnostics into the document must fail loudly."""
+        with pytest.raises(TypeError):
+            render_brief(CUSTOMER, [], "pass", findings=["GC-06 FR-01: no traces"])
 
 
 class TestTracesTypeOnRead:
@@ -459,36 +482,87 @@ class TestReadiness:
             meta["coverage"]["gate_passed"] is readiness(events, "customer").gate_passed
         )
 
-    def test_engineer_frame_cannot_reach_ready_even_fully_populated(self):
-        """Pins a known limitation, tracked as @id:feasibility-review-not-derived.
-
-        `feasibility_review` is engineer's one required key with prefix
-        `None` ("process, not a section" — FRAMES["engineer"]), and
-        `_coverage` marks a key `covered` only when an entry's id-prefix
-        matches. That key is therefore always `missing`, so `readiness` is
-        always `incomplete` for the engineer frame, no matter how complete
-        the transcript — every engineer run exits 11, never 0. This test
-        exists so a future change to `_coverage` that silently fixes or
-        worsens this moves a test; when @id:feasibility-review-not-derived
-        (TODO.md) is fixed, delete this test.
+    def test_engineer_frame_reaches_ready_when_the_feasibility_topic_is_answered(
+        self,
+    ):
+        """`feasibility_review` is engineer's one required key with prefix
+        `None` ("process, not a section" — FRAMES["engineer"]), so no entry
+        can evidence it. It is derived from the journal instead: a bank
+        question carrying that `coverage_key` with a currently effective
+        answer (§4). Before that derivation existed the key was always
+        `missing`, every engineer run exited 11, and GC-05's engineer rule —
+        which fires only on a `covered` claim — never ran at all.
         """
-        payload = (
-            "entries:\n"
-            "  - id: S-01\n"
-            "    body: current system assessment\n"
-            "  - id: IF-01\n"
-            "    body: an interface\n"
-            "  - id: CON-01\n"
-            "    body: a constraint\n"
-            "  - id: AP-01\n"
-            "    body: an architecture preference\n"
-            "  - id: RK-01\n"
-            "    body: a risk\n"
-        )
-        result = readiness([answer("q", "engineer", payload)], "engineer")
+        events = [
+            asked("eng.feas.01", "feasibility_review"),
+            answer("eng.feas.01", "architect", "text: reviewed every upstream FR\n"),
+            answer("eng.body.01", "architect", _ENGINEER_SECTIONS),
+        ]
+
+        result = readiness(events, "engineer")
+
+        assert result.verdict == "ready"
+        assert result.findings == []
+
+
+class TestProcessKeyCoverage:
+    """§4: a required key whose FRAMES prefix is `None` is journal-derived.
+
+    Every case here guards one way the join could quietly go fail-open.
+    """
+
+    def test_question_asked_alone_does_not_cover(self):
+        events = [
+            asked("eng.feas.01", "feasibility_review"),
+            answer("eng.body.01", "architect", _ENGINEER_SECTIONS),
+        ]
+
+        result = readiness(events, "engineer")
 
         assert result.verdict == "incomplete"
         assert any("feasibility_review" in f for f in result.findings)
+
+    def test_coverage_key_comes_from_the_persisted_event_not_the_question_id(self):
+        """The id says `goals`; the persisted marker says `feasibility_review`.
+
+        A re-pinned bank must never reclassify an answer already in the
+        journal, so the key is read off `question_asked` and never parsed
+        out of the question id.
+        """
+        events = [
+            asked("customer.goals.01", "feasibility_review"),
+            answer("customer.goals.01", "architect", "text: reviewed\n"),
+            answer("eng.body.01", "architect", _ENGINEER_SECTIONS),
+        ]
+
+        assert readiness(events, "engineer").verdict == "ready"
+
+    def test_orphan_answer_without_its_question_covers_nothing(self):
+        """`cmd_answer --question <never-issued>` records an answer with no
+        `question_asked` behind it. With no persisted marker there is no key
+        to close, and the join must intersect rather than assume."""
+        events = [
+            answer("eng.feas.01", "architect", "text: reviewed\n"),
+            answer("eng.body.01", "architect", _ENGINEER_SECTIONS),
+        ]
+
+        result = readiness(events, "engineer")
+
+        assert result.verdict == "incomplete"
+        assert any("feasibility_review" in f for f in result.findings)
+
+    def test_a_prefix_backed_key_is_never_closed_by_the_answer_alone(self):
+        """The rule is scoped to prefix-`None` keys. `goals` has prefix `G`
+        and stays entry-derived: answering the topic without producing a
+        single `G` record leaves it `missing`."""
+        events = [
+            asked("customer.goals.01", "goals"),
+            answer("customer.goals.01", "product", "text: our goal is growth\n"),
+        ]
+
+        result = readiness(events, "customer")
+
+        assert any("'goals' is not covered" in f for f in result.findings)
 
 
 class TestTranscriptParsedOnce:
@@ -516,9 +590,13 @@ class TestTranscriptParsedOnce:
         assert len(calls) == 1
 
     def test_events_and_entries_entry_points_agree(self):
-        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+        events = [
+            asked("customer.goals.01", "goals"),
+            answer("q", "product", _ALL_REQUIRED_COVERED),
+        ]
         entries = render_module._entries(events)
+        answered = render_module._answered_coverage_keys(events)
 
         assert readiness(events, "customer") == render_module._readiness_of(
-            entries, "customer"
+            entries, "customer", answered
         )

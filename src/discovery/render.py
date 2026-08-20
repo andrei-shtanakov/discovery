@@ -1,6 +1,6 @@
 """render_brief — journal to a contract-shaped brief (DESIGN-005).
 
-Pure function of `(header, events, validation, findings)`: frontmatter, coverage
+Pure function of `(header, events, validation)`: frontmatter, coverage
 and body are all derived from `SessionHeader` and the journal's *latest*
 answers; `validation` is the one fact the caller supplies and this module never
 infers or predicts (DESIGN-P3). Superseded answers are excluded structurally —
@@ -114,17 +114,45 @@ def _sessions(events: list[dict]) -> list[dict[str, str]]:
     return [{"participant_role": role} for role in seen]
 
 
-def _coverage(entries: list[Entry], frame: str) -> dict[str, str]:
-    """`covered` iff >=1 entry's id-prefix matches the key's FRAMES[frame] prefix."""
+def _answered_coverage_keys(events: list[dict]) -> set[str]:
+    """Coverage keys whose bank question carries a currently effective answer.
+
+    The join is between two folds over the journal: the latest
+    `question_asked` per `question_id`, which is where the `coverage_key`
+    lives, and the `question_id`s that have an `answer_recorded`. The key is
+    read off the persisted event and never off the current bank or the
+    question id, so re-pinning the bank cannot reclassify an answer already
+    recorded. Intersecting rather than assuming also means an answer whose
+    question was never issued (`answer --question <never-issued>`) closes
+    nothing: with no persisted marker there is no key to close.
+    """
+    asked: dict[str, str] = {}
+    for event in events:
+        if event.get("event") == "question_asked":
+            key = event.get("coverage_key")
+            if key is not None:
+                asked[event["question_id"]] = key
+    answered = {a["question_id"] for a in _latest_answers(events)}
+    return {asked[question_id] for question_id in asked.keys() & answered}
+
+
+def _coverage(
+    entries: list[Entry], frame: str, answered_keys: set[str]
+) -> dict[str, str]:
+    """`covered` iff >=1 entry's id-prefix matches the key's FRAMES[frame] prefix.
+
+    A key whose prefix is `None` is a process, not a section (engineer's
+    `feasibility_review`), so no entry can ever evidence it and it is
+    journal-derived instead (§4). The two branches never overlap: a
+    prefix-backed key stays entry-derived and is never closeable by the bare
+    fact of an answer.
+    """
     frame_def = FRAMES[frame]
     section_map = {**frame_def["required"], **frame_def["optional"]}
     prefixes_present = {e.prefix for e in entries}
-    # engineer's required `feasibility_review` has prefix None ("process, not
-    # a section"), so this always reads "missing" — structurally unreachable
-    # until @id:feasibility-review-not-derived (TODO.md) is fixed.
     return {
         key: "covered"
-        if prefix is not None and prefix in prefixes_present
+        if (prefix in prefixes_present if prefix is not None else key in answered_keys)
         else "missing"
         for key, prefix in section_map.items()
     }
@@ -177,14 +205,21 @@ def readiness(events: list[dict], frame: str) -> ReadinessResult:
     transcript into entries uses `_readiness_of` instead, so the payload
     YAML is parsed once per render pass rather than twice.
     """
-    return _readiness_of(_entries(events), frame)
+    return _readiness_of(_entries(events), frame, _answered_coverage_keys(events))
 
 
-def _readiness_of(entries: list[Entry], frame: str) -> ReadinessResult:
+def _readiness_of(
+    entries: list[Entry], frame: str, answered_keys: set[str]
+) -> ReadinessResult:
     """The §4 formula over already-parsed entries, with the failed clauses
     named in a deterministic order: uncovered required topics in frame
-    order, then untraced FRs and blocking open questions in answer order."""
-    coverage = _coverage(entries, frame)
+    order, then untraced FRs and blocking open questions in answer order.
+
+    `answered_keys` is the journal-derived half of coverage (§4); it cannot
+    be recovered from `entries`, which is why it arrives as an argument
+    rather than being re-derived here.
+    """
+    coverage = _coverage(entries, frame, answered_keys)
     ids = {e.eid for e in entries}
     findings: list[str] = []
 
@@ -255,24 +290,10 @@ def _render_body(entries: list[Entry]) -> str:
     return "\n\n".join(sections)
 
 
-def _render_findings(findings: list[str]) -> str:
-    # A leading heading line closes the last body entry in `gate_check`'s
-    # parser (which otherwise has no signal that the body has ended), so the
-    # comment's own text can never be folded into — and corrupt — a real
-    # entry's regex-parsed fields (status/blocking/traces/...).
-    lines = (
-        ["## Gate findings", "", "<!-- gate findings:"]
-        + [f"- {f}" for f in findings]
-        + ["-->"]
-    )
-    return "\n\n" + "\n".join(lines)
-
-
 def render_brief(
     header: SessionHeaderLike,
     events: list[dict],
     validation: str,
-    findings: list[str] | None = None,
 ) -> str:
     """Derive the entire brief — frontmatter and body — from `header`/`events`.
 
@@ -281,7 +302,8 @@ def render_brief(
     """
     frame = header.frame
     entries = _entries(events)
-    coverage = _coverage(entries, frame)
+    answered_keys = _answered_coverage_keys(events)
+    coverage = _coverage(entries, frame, answered_keys)
     open_questions = [
         e for e in entries if e.prefix == "Q" and not _is_true(e.fields.get("resolved"))
     ]
@@ -303,7 +325,7 @@ def render_brief(
             **coverage,
             # `entries` is already parsed here; going through the
             # events-level `readiness()` would re-parse every payload.
-            "gate_passed": _readiness_of(entries, frame).gate_passed,
+            "gate_passed": _readiness_of(entries, frame, answered_keys).gate_passed,
         },
         "open_questions": len(open_questions),
         "blocking_open_questions": len(blocking_open_questions),
@@ -314,6 +336,4 @@ def render_brief(
     frontmatter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
     title = f"# Discovery Brief — {header.target} ({frame}-фрейм)"
     text = f"---\n{frontmatter}---\n\n{title}\n\n{_render_body(entries)}"
-    if findings:
-        text += _render_findings(findings)
     return text

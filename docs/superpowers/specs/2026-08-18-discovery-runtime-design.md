@@ -112,6 +112,30 @@ per topic, requested upstream in `discovery-toolkit#4`. Until that lands, WS-A2
 is blocked (§10); no heading heuristic and no second `topic → key` table are
 introduced on this side.
 
+**Deriving coverage for a process key.** A required key whose `FRAMES` prefix is
+`None` has no section of its own, so no entry can ever evidence it. It is
+`covered` when at least one bank question carrying that exact `coverage_key` has
+a currently effective answer. A `question_asked` event alone is not enough:
+asking is not answering.
+
+The join uses the latest `question_asked` event and the latest `answer_recorded`
+event for the same `question_id`. The coverage key comes exclusively from the
+persisted `question_asked` event — never from the current bank, and never by
+parsing the question id — so a bank re-pin cannot silently reclassify an
+existing answer.
+
+The rule is scoped to prefix-`None` keys and to nothing else. A prefix-backed key
+stays entry-derived, and must never become closeable by the bare fact of an
+answer without the record that answer was supposed to produce — that would be a
+fail-open of exactly the kind this section's invariant exists to prevent.
+
+`covered` does not assert that the feasibility review is substantively complete
+or correct. It asserts only that a persisted question for that process key has a
+currently effective answer. Whether the claim survives the upstream brief is
+GC-05's question, and GC-12/GC-16's for the reference itself. The runtime states
+the process fact; the vendored linter checks the substantive one; neither
+reimplements the other.
+
 **Fail-closed invariant over the bank**, stated in the direction that catches
 loss: every required key of a frame is claimed by at least one topic marker, and
 where the key's prefix in `FRAMES` is not `None`, the topic's `produces`
@@ -260,12 +284,58 @@ single pass would either manufacture a GC-15 finding or force the runtime to
 predict the linter. The order is fixed:
 
 ```
-render(validation: pending) → check → render(validation: pass|fail + findings summary) → check
+render(validation: pending) → check → render(validation: pass|fail) → check
 ```
 
-Only the second pass's result is accepted, and a dedicated assertion holds that
-the second pass is clean with respect to GC-15. The runtime mirrors the linter;
-it never anticipates it.
+The second pass re-renders **only** the verdict. It writes no diagnostics into
+the document: the brief carries the data being checked and the `validation`
+claim about it, and nothing else the runtime learned from checking. The
+linter's findings belong to the run, not to the artifact, and they travel in
+the envelope (§7) where the caller already reads them.
+
+This is not a contract change. `DISCOVERY-BRIEF-CONTRACT.md` defines
+`validation`; it never required an embedded diagnostics section. What is removed
+is a non-normative runtime annotation, not a contract field, and the brief's
+schema version does not move.
+
+Only the second pass's result is accepted, and it is accepted only if the second
+pass saw the same facts as the first:
+
+**The accepted second-pass document contains no generated linter diagnostics,
+and its findings must equal the first pass's real findings** — excluding only
+the provisional GC-15 mismatch that `validation: pending` itself causes. The
+comparison is between ordered lists of findings, not sets: a vanished duplicate
+or a changed order is also a changed result, and normalising it away would hide
+exactly what the invariant is watching for. Any difference means rendering the
+verdict changed the facts being checked, and the operation fails closed —
+`GateInvariantError`, which the CLI's boundary turns into
+`operation.status: unknown` with all three axes `unknown` and exit `1`, rather
+than a verdict derived from a document that moved under it.
+
+Asserting equality rather than merely "no GC-15 in pass 2" is deliberate, and
+the reason is a live incident. GC-05's engineer rule tests whether each upstream
+Must-FR id appears anywhere in the brief — a substring scan over the whole
+document. While the second pass embedded the first pass's findings, the finding
+*"Must-FR FR-07 received no feasibility verdict"* put `FR-07` into the text, so
+the second pass found nothing, GC-15 fired spuriously, and the caller received
+`gate: fail` with the reason missing from `findings`. The document was
+satisfying the check by quoting its own failure. A GC-15-only assertion cannot
+see that; equality can, and it catches the next content-scanning rule without
+knowing anything about it.
+
+The invariant holds in all three shapes. Clean: pass 1 carries the provisional
+GC-15 alone, pass 2 carries nothing, both real sets empty. Warning-only:
+warnings survive unchanged and reach the envelope. Failing: pass 1's GC-05 is
+still pass 2's GC-05, naming the same FR.
+
+**Existing briefs.** A brief rendered before this rule that carries a
+`## Gate findings` block cannot be treated as safely re-checkable by the
+two-pass mechanism: its embedded text is part of what the linter scans. No such
+artifact exists — the three briefs shipped to `dispatcher` are all
+`validation: pass` with zero findings, and the block was only ever emitted for a
+non-empty set — but the rule is stated for the case rather than for the count.
+Should one appear, it is a legacy artifact: re-render it from its transcript,
+never hand-edit it (§5).
 
 The accepted result also carries the §4 readiness verdict and its diagnostics,
 taken from the same public function that supplies the frontmatter's
@@ -303,16 +373,27 @@ others:
   formula: every required key `covered` with a non-empty section, every FR
   traced to an existing G/J, zero blocking open questions.
 
-**Known limitation: the engineer frame cannot reach `readiness: ready`.** Its
-one required key with no id-prefix, `feasibility_review` ("process, not a
-section" — the frame's `FRAMES` entry), is never `covered` by the coverage
-formula above, which only recognises an entry whose id-prefix matches. Every
-engineer run therefore reports `readiness: incomplete` and exits `11`,
-regardless of how complete the transcript is. This is a disclosure, not a
-regression — the frontmatter's `gate_passed` was already `false` for every
-engineer brief before this axis existed, the envelope simply stopped
-contradicting it — and it is tracked as
-`@id:feasibility-review-not-derived` in `TODO.md`.
+**The engineer frame's `feasibility_review`.** The frame's one required key with
+no id-prefix is not derivable from entries, and the runtime used to write
+`missing` for it unconditionally. That made `readiness: ready` unreachable for
+every engineer run and — less visibly — meant GC-05's engineer rule never ran at
+all: it fires only when the brief claims `coverage.feasibility_review: covered`.
+A key nobody claimed was a check nobody performed.
+
+The runtime now derives it as §4 describes and states the claim. The division is
+deliberate: the runtime proves the process fact it can prove from its own
+journal, the frontmatter carries the claim, and the vendored linter tests that
+claim against the upstream brief. `readiness` projects the same §4 formula as
+before, without acquiring a second implementation of GC-05 — which would have
+meant resolving `traces_to`, reading the upstream document and re-deriving its
+Must-FR set alongside the linter that already does all three.
+
+The cost is named: a thin answer to the feasibility topic now turns a completed
+engineer run into `gate: fail`, exit `10`, with a finding naming the Must-FR
+that received no verdict. That is not a new strictness of policy but the
+activation of a check that already existed and had never run. And passing it is
+not proof that each feasibility verdict is any good — only that the formalised
+checks hold.
 
 The axis is a projection, never a second implementation: `readiness` and the
 frontmatter's `gate_passed` are one public function over the same events, so
