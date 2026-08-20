@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 NO_TARGET_QUESTION = "no_target_question"
 ANSWER_CONFLICT = "answer_conflict"
 
-READY = "ready"
 INCOMPLETE = "incomplete"
 
 
