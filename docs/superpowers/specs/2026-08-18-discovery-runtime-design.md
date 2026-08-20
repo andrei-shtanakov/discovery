@@ -303,6 +303,17 @@ others:
   formula: every required key `covered` with a non-empty section, every FR
   traced to an existing G/J, zero blocking open questions.
 
+**Known limitation: the engineer frame cannot reach `readiness: ready`.** Its
+one required key with no id-prefix, `feasibility_review` ("process, not a
+section" — the frame's `FRAMES` entry), is never `covered` by the coverage
+formula above, which only recognises an entry whose id-prefix matches. Every
+engineer run therefore reports `readiness: incomplete` and exits `11`,
+regardless of how complete the transcript is. This is a disclosure, not a
+regression — the frontmatter's `gate_passed` was already `false` for every
+engineer brief before this axis existed, the envelope simply stopped
+contradicting it — and it is tracked as
+`@id:feasibility-review-not-derived` in `TODO.md`.
+
 The axis is a projection, never a second implementation: `readiness` and the
 frontmatter's `gate_passed` are one public function over the same events, so
 the envelope cannot disagree with the document it describes.
@@ -559,7 +570,8 @@ The live evidence, in order:
 2. The process exits; state survives.
 3. A **new** process runs `status`, then `answer`.
 4. The interview reaches `lifecycle: complete`, `gate: pass`,
-   `readiness: ready`, exit `0`.
+   `readiness: ready`, exit `0` — for the **customer** frame. The engineer
+   frame cannot produce this outcome today (§7, known limitation).
 5. The brief is written to the permitted `brief_path` in the target repo.
 6. An independent invocation of the vendored gate confirms the clean result.
 7. A ledger ties together session id, transcript SHA-256, brief SHA-256, and the

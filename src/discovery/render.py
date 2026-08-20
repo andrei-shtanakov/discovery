@@ -119,6 +119,9 @@ def _coverage(entries: list[Entry], frame: str) -> dict[str, str]:
     frame_def = FRAMES[frame]
     section_map = {**frame_def["required"], **frame_def["optional"]}
     prefixes_present = {e.prefix for e in entries}
+    # engineer's required `feasibility_review` has prefix None ("process, not
+    # a section"), so this always reads "missing" — structurally unreachable
+    # until @id:feasibility-review-not-derived (TODO.md) is fixed.
     return {
         key: "covered"
         if prefix is not None and prefix in prefixes_present

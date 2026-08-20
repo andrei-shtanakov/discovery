@@ -436,3 +436,34 @@ class TestReadiness:
         assert (
             meta["coverage"]["gate_passed"] is readiness(events, "customer").gate_passed
         )
+
+    def test_engineer_frame_cannot_reach_ready_even_fully_populated(self):
+        """Pins a known limitation, tracked as @id:feasibility-review-not-derived.
+
+        `feasibility_review` is engineer's one required key with prefix
+        `None` ("process, not a section" — FRAMES["engineer"]), and
+        `_coverage` marks a key `covered` only when an entry's id-prefix
+        matches. That key is therefore always `missing`, so `readiness` is
+        always `incomplete` for the engineer frame, no matter how complete
+        the transcript — every engineer run exits 11, never 0. This test
+        exists so a future change to `_coverage` that silently fixes or
+        worsens this moves a test; when @id:feasibility-review-not-derived
+        (TODO.md) is fixed, delete this test.
+        """
+        payload = (
+            "entries:\n"
+            "  - id: S-01\n"
+            "    body: current system assessment\n"
+            "  - id: IF-01\n"
+            "    body: an interface\n"
+            "  - id: CON-01\n"
+            "    body: a constraint\n"
+            "  - id: AP-01\n"
+            "    body: an architecture preference\n"
+            "  - id: RK-01\n"
+            "    body: a risk\n"
+        )
+        result = readiness([answer("q", "engineer", payload)], "engineer")
+
+        assert result.verdict == "incomplete"
+        assert any("feasibility_review" in f for f in result.findings)
