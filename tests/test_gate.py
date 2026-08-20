@@ -123,6 +123,28 @@ class TestPassingBriefWithWarningsOnly:
         assert not any(f.startswith("GC-15") for f in result.findings)
 
 
+class TestReadinessOnGateResult:
+    def test_thin_brief_is_lint_clean_but_not_ready(self, tmp_path):
+        result = render_and_gate(CUSTOMER, [], tmp_path)
+
+        assert result.readiness == "incomplete"
+        assert result.readiness_findings != []
+
+    def test_full_brief_is_ready_with_no_readiness_findings(self, tmp_path):
+        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+
+        result = render_and_gate(CUSTOMER, events, tmp_path)
+
+        assert result.status == "pass"
+        assert result.readiness == "ready"
+        assert result.readiness_findings == []
+
+    def test_readiness_findings_are_not_mixed_into_linter_findings(self, tmp_path):
+        result = render_and_gate(CUSTOMER, [], tmp_path)
+
+        assert not set(result.readiness_findings) & set(result.findings)
+
+
 class TestPass2NeverCorruptsTrailingEntry:
     def test_findings_comment_does_not_leak_into_last_body_entry(self, tmp_path):
         """Regression: the embedded findings HTML comment must not be parsed

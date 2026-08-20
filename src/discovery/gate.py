@@ -7,7 +7,9 @@ satisfy it: before checking, the real verdict is unknown, so pass 1 can only
 ever claim `validation="pending"`. Pass 2 re-renders with the verdict pass 1
 derived, so its own check-pass mirrors exactly what pass 1 already computed
 and can never disagree with itself. Only the second pass's `GateResult` is
-returned.
+returned. The §4 verdict travels on the same result as the linter's, taken
+from `render.readiness`, so §7's two verdicts are computed once each and
+never re-derived by the protocol layer.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from discovery.contract.gate_check import check
-from discovery.render import SessionHeaderLike, render_brief
+from discovery.render import SessionHeaderLike, readiness, render_brief
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,8 @@ class GateResult:
     status: str  # "pass" | "fail"
     findings: list[str]
     text: str
+    readiness: str  # "ready" | "incomplete"
+    readiness_findings: list[str]
 
 
 def render_and_gate(
@@ -50,6 +54,11 @@ def render_and_gate(
         findings=[str(f) for f in real_findings],
     )
     pass_2_findings = check(final_text, base_dir=base_dir)
+    verdict = readiness(events, header.frame)
     return GateResult(
-        status=status, findings=[str(f) for f in pass_2_findings], text=final_text
+        status=status,
+        findings=[str(f) for f in pass_2_findings],
+        text=final_text,
+        readiness=verdict.verdict,
+        readiness_findings=verdict.findings,
     )
