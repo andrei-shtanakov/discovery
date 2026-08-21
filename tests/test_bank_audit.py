@@ -83,3 +83,20 @@ class TestBaseline:
     def test_snapshot_records_the_contract_pin(self):
         current = bank_audit.snapshot(FRAMES)
         assert current["pin"], "a snapshot without its pin cannot be attributed"
+
+
+class TestCLI:
+    def test_documented_invocation_prints_the_report(self, monkeypatch, capsys):
+        monkeypatch.setattr(
+            sys, "argv", ["bank_audit.py", "report", "--frames", str(FRAMES)]
+        )
+        assert bank_audit.main() == 0
+        assert "issued question(s)" in capsys.readouterr().out
+
+    def test_unknown_positional_is_rejected(self, monkeypatch, capsys):
+        monkeypatch.setattr(
+            sys, "argv", ["bank_audit.py", "nonsense", "--frames", str(FRAMES)]
+        )
+        with pytest.raises(SystemExit) as excinfo:
+            bank_audit.main()
+        assert excinfo.value.code != 0

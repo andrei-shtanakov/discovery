@@ -130,20 +130,20 @@ PINNED = (
 
 def snapshot(frames_dir: Path) -> dict:
     """JSON-able classification of both frames, plus the contract pin."""
+    frames = {}
+    for frame in ("customer", "engineer"):
+        audit = audit_frame(frame, frames_dir)
+        frames[frame] = {
+            "issued": len(audit.questions),
+            "questions": {
+                q.question_id: q.categories for q in audit.questions if q.categories
+            },
+            "claimed": audit.claimed,
+            "unissued_topics": audit.unissued_topics,
+        }
     return {
         "pin": PINNED.read_text(encoding="utf-8").strip(),
-        "frames": {
-            frame: {
-                "issued": len(audit.questions),
-                "questions": {
-                    q.question_id: q.categories for q in audit.questions if q.categories
-                },
-                "claimed": audit.claimed,
-                "unissued_topics": audit.unissued_topics,
-            }
-            for frame in ("customer", "engineer")
-            if (audit := audit_frame(frame, frames_dir))
-        },
+        "frames": frames,
     }
 
 
@@ -166,6 +166,7 @@ def _report(frames_dir: Path) -> None:
 def main() -> int:
     """Report the audit, or refresh the committed baseline snapshot."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", nargs="?", default="report", choices=["report"])
     parser.add_argument("--frames", type=Path, default=PINNED.parent / "frames")
     parser.add_argument("--emit-baseline", action="store_true")
     args = parser.parse_args()
