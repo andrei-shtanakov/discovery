@@ -46,23 +46,45 @@ Fail-closed, до первого агента. Пункт не проверен 
 
 ### Проверка scope
 
-Матчером **самого maestro**, его же интерпретатором — не копией семантики у нас:
+Матчером **самого maestro**, его же интерпретатором — не копией семантики у нас.
+Проверяется по одному воркстриму: ожидаемый набор путей лежит в файле, по строке
+на путь.
+
+Шаг 1 — записать ожидаемый набор. Для уже пройденного воркстрима он берётся
+фактом, дифом **от merge-base** (ловушка 3); для предстоящего — прогнозом по
+плану, руками:
 
 ```sh
-~/.local/share/uv/tools/maestro/bin/python - <<'EOF'
-from maestro.scope_gate import find_escapes, normalize
+git diff --name-only \
+  "$(git merge-base <base> <evidence-ветка>)..<evidence-ветка>" > /tmp/a1-expected.txt
+```
+
+Шаг 2 — сверить его со `scope` из конфига. Скрипт печатает escape'ы и выходит
+`1`, если они есть, поэтому его можно ставить в предполётную цепочку через `&&`:
+
+```sh
+~/.local/share/uv/tools/maestro/bin/python - project.yaml a1-contract /tmp/a1-expected.txt <<'EOF'
+import sys
+
 import yaml
-cfg = yaml.safe_load(open("project.yaml", encoding="utf-8"))
-for w in cfg["workstreams"]:
-    print(w["id"], find_escapes(normalize(EXPECTED_PATHS[w["id"]]), w["scope"]))
+from maestro.scope_gate import find_escapes, normalize
+
+config_path, ws_id, expected_path = sys.argv[1:4]
+with open(expected_path, encoding="utf-8") as fh:
+    expected = [line.strip() for line in fh if line.strip()]
+cfg = yaml.safe_load(open(config_path, encoding="utf-8"))
+ws = next(w for w in cfg["workstreams"] if w["id"] == ws_id)
+escapes = find_escapes(normalize(expected), ws["scope"])
+print(f"{ws_id}: {len(expected)} paths, escapes: {escapes or 'none'}")
+raise SystemExit(1 if escapes else 0)
 EOF
 ```
 
-Для уже пройденного воркстрима ожидаемый набор берётся фактом:
-
-```sh
-git diff --name-only $(git merge-base <base> <evidence-ветка>)..<evidence-ветка>
-```
+Прогнано на этом репо 2026-08-21 против `project.yaml` в master: чистый набор
+даёт `escapes: none` / exit 0, а подмешанный `src/discovery/cli.py` (он вне
+scope `a1-contract`) — `escapes: ['src/discovery/cli.py']` / exit 1. Сигнатуры
+пиненые: `normalize(paths: list[str])`, `find_escapes(changed_paths: list[str],
+scope: list[str])`.
 
 ## Ловушки
 
