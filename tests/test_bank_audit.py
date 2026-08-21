@@ -62,3 +62,24 @@ class TestAuditFrame:
         audit = bank_audit.audit_frame("customer", FRAMES)
         required = set(gate_check.FRAMES["customer"]["required"])
         assert required <= set(audit.claimed)
+
+
+BASELINE = Path(__file__).resolve().parent / "data" / "bank_audit_baseline.json"
+
+
+class TestBaseline:
+    def test_snapshot_matches_the_committed_baseline(self):
+        import json
+
+        current = bank_audit.snapshot(FRAMES)
+        recorded = json.loads(BASELINE.read_text(encoding="utf-8"))
+        assert current == recorded, (
+            "the bank's wording or composition changed. If the change is "
+            "deliberate, refresh with `uv run python tools/bank_audit.py "
+            "--emit-baseline` and explain the diff in the pull request; the "
+            "leading-question categories are the thing under review."
+        )
+
+    def test_snapshot_records_the_contract_pin(self):
+        current = bank_audit.snapshot(FRAMES)
+        assert current["pin"], "a snapshot without its pin cannot be attributed"
