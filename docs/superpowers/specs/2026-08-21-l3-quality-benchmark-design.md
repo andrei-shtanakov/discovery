@@ -32,7 +32,8 @@ regression threshold that does exist is the static leading-question baseline of
 ## 2. Two corrections to the 2026-07-13 plan
 
 **The runtime does not interview.** `next_question` in
-`src/discovery/lifecycle.py` is a deterministic sequencer over a vendored bank: a pending question is rebuilt from its own `question_asked` event, and
+`src/discovery/lifecycle.py` is a deterministic sequencer over a vendored
+bank: a pending question is rebuilt from its own `question_asked` event, and
 only the "nothing pending" branch consults `source.questions(frame)` for the
 first unissued question. No model runs inside the runtime, and none can:
 `tests/test_boundary.py` forbids network and process-launch imports anywhere in
@@ -85,9 +86,13 @@ here; question wording, bank composition, methodology → a handoff issue in
 
 ## 4. Run architecture
 
-Three roles, three processes, three contexts, and **no direct channel between
-them**: the harness is the only place all three meet. It relays one utterance at
-a time.
+Four roles, four processes, four contexts, and **no direct channel between any
+of them**. Only two take part in the loop — simulator and reference caller — and
+even they never touch: the harness relays one utterance at a time and is the
+sole place both sides meet. Judge and matcher run after the loop, over the
+recorded transcript, and never address a live role. The annotator (§6.1) is not
+a run role at all: it is a pre-run stage that produces ground truth long before
+any loop starts.
 
 - **simulator** — `claude -p --model <selection>` with every tool disallowed.
   The hidden spec exists only in its system prompt and only in its process.
@@ -105,27 +110,28 @@ command: the harness writes the payload to a file and the caller passes
 
 **Absence of tools is not absence of leakage.** A simulator can quote its hidden
 spec verbatim in an ordinary reply. A deterministic leakage check compares each
-simulator utterance against the hidden spec — a shared shingle of at least N
-tokens, or structural disclosure (dumping the requirement list or its ids) — and
-its parameters are pinned in the stand's `config.toml`. This document fixes the
-method and the requirement that the parameters be pinned and versioned; the
-implementation plan chooses the shingle length and enumerates the structural
-forms, and changing either is a configuration change with its own SHA in the run
-manifest. A detected leak marks the run `invalid_leak`. It never improves
-recall.
+simulator utterance against the hidden spec — a shared shingle of at least
+`leak_shingle_tokens` tokens, or structural disclosure (dumping the requirement
+list or its ids) — and its parameters are pinned in the stand's `config.toml`.
+This document fixes the method and the requirement that the parameters be pinned
+and versioned; the implementation plan chooses `leak_shingle_tokens` and
+enumerates the structural forms, and changing either is a configuration change
+carrying its own hash in the run manifest. A detected leak marks the run
+`invalid_leak`, and it never improves recall.
 
 **`--model` is a selection, not an immutable pin**, until the provider exposes a
 finer revision. The manifest stores both the CLI argument and the `model`
 identifier actually reported in `stream-json`, and the protocol calls it model
 selection.
 
-Repetitions: N = 5 per scenario in v1. Results are distributions — median and
-spread — never a single score.
+Repetitions: `repetitions = 5` per scenario in v1, pinned in `config.toml`
+like every other run parameter. Results are distributions — median and spread —
+never a single score.
 
 ## 5. Layer A — static bank audit (this repository, CI)
 
-Input is `parse_frame` in `src/discovery/bank.py` over the vendored frames: `Topic.coverage_key`,
-`Topic.produces`, `Topic.questions`.
+Input is `parse_frame` in `src/discovery/bank.py` over the vendored frames:
+`Topic.coverage_key`, `Topic.produces`, `Topic.questions`.
 
 - **Potential coverage** — which required keys of a frame are claimed by which
   topics. The fail-closed completeness invariant already exists; this adds a
@@ -251,18 +257,25 @@ threshold is derived from the judge in v1.
 discovery-test/
   prompts/{simulator,caller,judge,matcher,annotator}.md
   PINNED.txt                      # discovery-toolkit methodology @ sha
-  config.toml                     # leakage shingle N, structural-disclosure rules, N repetitions
-  scenarios/S1-customer/{source/, annotation/{human-draft,llm-draft}.yaml,
-                        adjudication.md, ground-truth.yaml}
+  config.toml                     # leak_shingle_tokens, structural-disclosure
+                                  # rules, repetitions
+  scenarios/{S1-customer,S2-engineer,S3-contradiction}/
+      {source/, annotation/{human-draft,llm-draft}.yaml,
+       adjudication.md, ground-truth.yaml}
   runs/<ULID>/{run-manifest.json, roles/*/stream.jsonl,
                artifacts/{brief.md, approved/brief.md}, metrics.json}
 ```
 
-`run-manifest.json` carries every effective input by SHA: `claude --version`,
-each role's model selection (argument **and** reported identifier), prompt SHAs,
-methodology pin, `discovery` revision and `src/discovery/contract/PINNED.txt`, scenario and
-ground-truth SHAs, harness revision, token and call counters, and paths to the
-full `stream-json` of every role. Money is not stored: tokens and calls are, and
+`run-manifest.json` carries every effective input, each in the form it
+actually has: **file hashes** for everything the stand owns as a file — the five
+prompts, `config.toml`, the scenario, the ground truth — and **exact recorded
+values** for what is external and has no file to hash: the `claude --version`
+string, each role's model selection (the CLI argument **and** the identifier
+reported in `stream-json`), the methodology pin, the `discovery` revision with
+`src/discovery/contract/PINNED.txt`, and the harness revision. Calling all of it
+"SHAs" would be wrong — a CLI version and a model identifier are values, not
+digests. It also carries token and call counters and the paths to the full
+`stream-json` of every role. Money is not stored: tokens and calls are, and
 a separately pinned price table converts them.
 
 Run states: `ok`, `invalid_leak`, `blocked_by_upstream_run`, `harness_error`.
@@ -272,10 +285,12 @@ The last three are retained in full.
 
 A stand without a remote and without CI goes stale silently, so `TODO.md` gets
 one item with an `@owner:`, the command that reads the stand's last commit and
-its newest `run-manifest.json`, and a freshness criterion computed **by SHA over
-every effective input of the manifest** — bank/contract pin, caller, simulator,
-matcher and judge prompts, methodology pin, scenario, ground truth, harness
-revision, model selections. Any mismatch means "no run exists for the current
+its newest `run-manifest.json`, and a freshness criterion computed over **every
+effective input of the manifest**, comparing hashes where the input is a file
+and recorded values where it is not: bank/contract pin; the caller, simulator,
+judge, matcher and annotator prompts; `config.toml`; the methodology pin; the
+scenario and its ground truth; the harness revision; the Claude Code version;
+and every model selection. Any mismatch means "no run exists for the current
 configuration"; a date proves nothing. The item's `@trigger:` names changes to
 those inputs, not only to the bank and the caller.
 
