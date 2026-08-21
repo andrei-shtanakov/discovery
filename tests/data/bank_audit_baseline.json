@@ -1,0 +1,129 @@
+{
+  "frames": {
+    "customer": {
+      "claimed": {
+        "constraints": [
+          "CON"
+        ],
+        "functions": [
+          "FR"
+        ],
+        "goals": [
+          "G"
+        ],
+        "jobs": [
+          "J"
+        ],
+        "nfr": [
+          "NFR"
+        ],
+        "out_of_scope": [
+          "OUT"
+        ],
+        "personas": [
+          "P"
+        ],
+        "risks": [
+          "RK"
+        ],
+        "success_metrics": [
+          "M"
+        ]
+      },
+      "digests": {
+        "customer.constraints.01": "87c2baa940fc",
+        "customer.constraints.02": "0d3eebb8ca1f",
+        "customer.functions.01": "3d0e96c26cdf",
+        "customer.functions.02": "bc2ae16f9ae1",
+        "customer.functions.03": "dd2cfdd9aa00",
+        "customer.goals.01": "8d31d412979f",
+        "customer.goals.02": "e2caccdd6da9",
+        "customer.goals.03": "4afe3b862032",
+        "customer.jobs.01": "a0e73e2750d2",
+        "customer.jobs.02": "d5a42842503b",
+        "customer.nfr.01": "838d0068e90c",
+        "customer.nfr.02": "bafd5fe57c32",
+        "customer.out_of_scope.01": "271e0cfca0c6",
+        "customer.out_of_scope.02": "009527322c36",
+        "customer.personas.01": "f6a01e09ebc5",
+        "customer.personas.02": "f526ebcb531b",
+        "customer.risks.01": "bf204a4f2fc5",
+        "customer.success_metrics.01": "743faeb9217c",
+        "customer.success_metrics.02": "dee08c6f102d"
+      },
+      "issued": 19,
+      "leading": 2,
+      "questions": {
+        "customer.jobs.01": [
+          "advisory"
+        ],
+        "customer.nfr.02": [
+          "answer_menu"
+        ],
+        "customer.personas.01": [
+          "answer_menu"
+        ]
+      },
+      "unissued_topics": [
+        "3 bullet(s) under a coverage_key: none topic"
+      ]
+    },
+    "engineer": {
+      "claimed": {
+        "arch_preferences": [
+          "AP"
+        ],
+        "constraints": [
+          "CON"
+        ],
+        "feasibility_review": [
+          "X",
+          "Q"
+        ],
+        "interfaces": [
+          "IF"
+        ],
+        "risks": [
+          "RK"
+        ],
+        "systems": [
+          "S"
+        ]
+      },
+      "digests": {
+        "engineer.arch_preferences.01": "05daad165643",
+        "engineer.arch_preferences.02": "95a7587ac2fd",
+        "engineer.constraints.01": "76615d454aee",
+        "engineer.constraints.02": "6dfa5c6293dd",
+        "engineer.feasibility_review.01": "095fc1673942",
+        "engineer.feasibility_review.02": "77b16cb213b7",
+        "engineer.feasibility_review.03": "2cfd620281db",
+        "engineer.interfaces.01": "c73e76c8bdce",
+        "engineer.interfaces.02": "4a489d928ec8",
+        "engineer.risks.01": "8c8cdd5ee58e",
+        "engineer.risks.02": "273274fff9f8",
+        "engineer.risks.03": "88e3ae8617e0",
+        "engineer.systems.01": "6b1d295d8c3f",
+        "engineer.systems.02": "720efe028857",
+        "engineer.systems.03": "34e8f9abfda0"
+      },
+      "issued": 15,
+      "leading": 1,
+      "questions": {
+        "engineer.feasibility_review.02": [
+          "advisory"
+        ],
+        "engineer.feasibility_review.03": [
+          "advisory"
+        ],
+        "engineer.interfaces.01": [
+          "answer_menu"
+        ]
+      },
+      "unissued_topics": [
+        "2 bullet(s) under a coverage_key: none topic"
+      ]
+    }
+  },
+  "pin": "upstream: git@github.com:andrei-shtanakov/discovery-toolkit.git\ncommit: ee93092fdfe6195c28c7392d85b41c6b94b9fe0a\n\nDISCOVERY-BRIEF-CONTRACT.md 082346bed016d996bf9df13bf3379efb918d7e1c261c0648f61effe795638c60\ngate_check.py f226ab93f6f4b54f161c459746b589fe9a49c8d04f91a53eb55cb185a8c54524\n.claude/skills/discovery-interview/frames/customer.md 80ebc69c9dd7bc300f066fbf439dd6064179402c620663c264d1f499d01b1f2d\n.claude/skills/discovery-interview/frames/engineer.md 9793b684ce3bd1334244df4b66982092d90da089810bfa1fe4d2a6633f793441"
+}
