@@ -19,7 +19,7 @@ import json
 import re
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -90,42 +90,56 @@ def classify(text: str) -> list[str]:
 
 @dataclass(frozen=True)
 class QuestionAudit:
-    """One issued question and the categories it falls into."""
+    """One issued question and the categories it falls into.
+
+    `categories` is a `tuple`, not a `list`: `frozen=True` only blocks
+    rebinding the attribute, so a mutable field would let an in-place edit
+    silently change an audit result after the fact.
+    """
 
     question_id: str
     coverage_key: str
     text: str
-    categories: list[str] = field(default_factory=list)
+    categories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class FrameAudit:
-    """One frame: its issued questions, claimed keys, and unissued topics."""
+    """One frame: its issued questions, claimed keys, and unissued topics.
+
+    `questions` and `unissued_topics` are tuples for the same reason as
+    `QuestionAudit.categories` above. `claimed` stays a plain `dict`
+    (`dict[str, list[str]]`) — deliberately, not an oversight: a tuple
+    cannot replace a mapping, and there is no frozen-mapping type in the
+    standard library worth reaching for here. Its values remain mutable
+    lists; nothing in this module mutates them, but that boundary is not
+    enforced by the type the way the tuple fields are.
+    """
 
     frame: str
-    questions: list[QuestionAudit]
+    questions: tuple[QuestionAudit, ...]
     claimed: dict[str, list[str]]
-    unissued_topics: list[str]
+    unissued_topics: tuple[str, ...]
 
 
 def audit_frame(frame: str, frames_dir: Path) -> FrameAudit:
     """Classify `frame`'s issued questions and report its coverage claims."""
     source = BankQuestionSource(pin="audit", frames_dir=frames_dir)
-    questions = [
-        QuestionAudit(q.question_id, q.coverage_key, q.text, classify(q.text))
+    questions = tuple(
+        QuestionAudit(q.question_id, q.coverage_key, q.text, tuple(classify(q.text)))
         for q in source.questions(frame)
-    ]
+    )
     topics = parse_frame((frames_dir / f"{frame}.md").read_text(encoding="utf-8"))
     claimed = {
         topic.coverage_key: list(topic.produces)
         for topic in topics
         if topic.coverage_key is not None
     }
-    unissued = [
+    unissued = tuple(
         f"{len(topic.questions)} bullet(s) under a coverage_key: none topic"
         for topic in topics
         if topic.coverage_key is None and topic.questions
-    ]
+    )
     return FrameAudit(frame, questions, claimed, unissued)
 
 
@@ -156,14 +170,18 @@ def snapshot(frames_dir: Path) -> dict:
     for frame in ("customer", "engineer"):
         audit = audit_frame(frame, frames_dir)
         flagged = [q for q in audit.questions if q.categories]
-        leading = [q for q in flagged if q.categories != ["advisory"]]
+        leading = [q for q in flagged if q.categories != ("advisory",)]
         frames[frame] = {
             "issued": len(audit.questions),
             "leading": len(leading),
             "digests": {q.question_id: _digest(q.text) for q in audit.questions},
-            "questions": {q.question_id: q.categories for q in flagged},
+            # list(...): categories/unissued_topics are tuples internally
+            # (see QuestionAudit/FrameAudit); the baseline is JSON, which has
+            # no tuple, so the payload must materialise plain lists or
+            # `current == recorded` fails on type alone, not on content.
+            "questions": {q.question_id: list(q.categories) for q in flagged},
             "claimed": audit.claimed,
-            "unissued_topics": audit.unissued_topics,
+            "unissued_topics": list(audit.unissued_topics),
         }
     return {
         "pin": PINNED.read_text(encoding="utf-8").strip(),
@@ -176,7 +194,7 @@ def _report(frames_dir: Path) -> None:
     for frame in ("customer", "engineer"):
         audit = audit_frame(frame, frames_dir)
         flagged = [q for q in audit.questions if q.categories]
-        leading = [q for q in flagged if q.categories != ["advisory"]]
+        leading = [q for q in flagged if q.categories != ("advisory",)]
         print(f"\n=== {frame}: {len(audit.questions)} issued question(s)")
         print(f"    claimed keys: {', '.join(sorted(audit.claimed))}")
         for note in audit.unissued_topics:

@@ -85,6 +85,16 @@ class TestAuditFrame:
         for question in audit.questions:
             assert set(question.categories) <= set(bank_audit.CATEGORIES)
 
+    def test_categories_is_a_tuple_not_a_mutable_list(self):
+        # frozen=True only blocks rebinding the attribute; a mutable list
+        # field would let an in-place edit silently change an audit result.
+        # If `categories` ever reverts to a list, `.append` would succeed
+        # instead of raising, and this test would fail loudly.
+        audit = bank_audit.audit_frame("customer", FRAMES)
+        question = audit.questions[0]
+        with pytest.raises(AttributeError):
+            question.categories.append("mutated")
+
 
 BASELINE = Path(__file__).resolve().parent / "data" / "bank_audit_baseline.json"
 
