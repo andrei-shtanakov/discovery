@@ -31,9 +31,8 @@ regression threshold that does exist is the static leading-question baseline of
 
 ## 2. Two corrections to the 2026-07-13 plan
 
-**The runtime does not interview.** `next_question`
-(`src/discovery/lifecycle.py:38`) is a deterministic sequencer over a vendored
-bank: a pending question is rebuilt from its own `question_asked` event, and
+**The runtime does not interview.** `next_question` in
+`src/discovery/lifecycle.py` is a deterministic sequencer over a vendored bank: a pending question is rebuilt from its own `question_asked` event, and
 only the "nothing pending" branch consults `source.questions(frame)` for the
 first unissued question. No model runs inside the runtime, and none can:
 `tests/test_boundary.py` forbids network and process-launch imports anywhere in
@@ -68,9 +67,9 @@ project.
 
 | Artifact | Where | Why there |
 |---|---|---|
-| Static bank audit | `discovery/tests/` | the bank is vendored here; a re-pin that worsens wording must fail CI, cheaply |
-| Runtime invariants | `discovery/tests/` (existing) | not duplicated; extended only when a run finds something |
-| Simulator, reference caller, judge, matcher, annotator, harness, scenarios, ground truth, run logs | `discovery-test` | hidden specs and model logs do not leave the machine; pins are needed, publication is not |
+| Static bank audit | `tests/`, this repo | the bank is vendored here; a re-pin that worsens wording must fail CI, cheaply |
+| Runtime invariants | `tests/`, this repo (existing) | not duplicated; extended only when a run finds something |
+| Simulator, reference caller, judge, matcher, annotator, harness, scenarios, ground truth, run logs | the `discovery-test` stand | hidden specs and model logs do not leave the machine; pins are needed, publication is not |
 
 The **reference caller** is a benchmark artifact, not a product one. It calls
 only the public CLI contract (`start` / `status` / `answer` / `brief` and the
@@ -125,7 +124,7 @@ spread — never a single score.
 
 ## 5. Layer A — static bank audit (this repository, CI)
 
-Input is `bank.parse_frame` over the vendored frames: `Topic.coverage_key`,
+Input is `parse_frame` in `src/discovery/bank.py` over the vendored frames: `Topic.coverage_key`,
 `Topic.produces`, `Topic.questions`.
 
 - **Potential coverage** — which required keys of a frame are claimed by which
@@ -261,7 +260,7 @@ discovery-test/
 
 `run-manifest.json` carries every effective input by SHA: `claude --version`,
 each role's model selection (argument **and** reported identifier), prompt SHAs,
-methodology pin, `discovery` revision and `contract/PINNED.txt`, scenario and
+methodology pin, `discovery` revision and `src/discovery/contract/PINNED.txt`, scenario and
 ground-truth SHAs, harness revision, token and call counters, and paths to the
 full `stream-json` of every role. Money is not stored: tokens and calls are, and
 a separately pinned price table converts them.
