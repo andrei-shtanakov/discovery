@@ -35,6 +35,19 @@ class TestClassify:
             "Почему вы не сделали это раньше?"
         )
 
+    def test_delayed_presupposition_is_leading(self):
+        text = "Почему вы до сих пор не автоматизировали?"
+        assert "presupposition" in bank_audit.classify(text)
+
+    def test_innocent_pochemu_vy_question_stays_clean(self):
+        assert bank_audit.classify("Почему вы выбрали этот стек?") == []
+
+    def test_real_bank_pochemu_question_stays_clean(self):
+        # customer.goals.02 — a real bank bullet; the narrow "до сих пор не"
+        # alternative must not catch this neighbour.
+        text = "Почему сейчас? Что случится, если ничего не делать полгода?"
+        assert bank_audit.classify(text) == []
+
     def test_non_question_is_advisory(self):
         text = "Прогони перед стейкхолдером краткое резюме целей."
         assert bank_audit.classify(text) == ["advisory"]
@@ -62,6 +75,15 @@ class TestAuditFrame:
         audit = bank_audit.audit_frame("customer", FRAMES)
         required = set(gate_check.FRAMES["customer"]["required"])
         assert required <= set(audit.claimed)
+
+    @pytest.mark.parametrize("frame", ["customer", "engineer"])
+    def test_every_emitted_category_is_registered_in_categories(self, frame):
+        # A category classify() emits but CATEGORIES doesn't list would slip
+        # past the digest/leading counts silently; this pins the invariant
+        # against the whole real bank, not just classify()'s unit cases.
+        audit = bank_audit.audit_frame(frame, FRAMES)
+        for question in audit.questions:
+            assert set(question.categories) <= set(bank_audit.CATEGORIES)
 
 
 BASELINE = Path(__file__).resolve().parent / "data" / "bank_audit_baseline.json"

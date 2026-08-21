@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -34,8 +35,12 @@ _TAG_RE = re.compile(
 )
 
 #: Leading by presupposition: the question asserts the fact it asks about.
+#: The "до сих пор" alternative is narrow by design — it catches exactly the
+#: "почему вы до сих пор не ..." construction, not any wording with words
+#: between "почему вы" and "не" (that would flag ordinary questions too).
 _PRESUPPOSITION_RE = re.compile(
-    r"(почему вы не |что мешает вам |когда вы наконец |почему до сих пор )",
+    r"(почему вы не |почему вы до сих пор не |что мешает вам "
+    r"|когда вы наконец |почему до сих пор )",
     re.IGNORECASE,
 )
 
@@ -55,20 +60,6 @@ _INSTRUCTION_VERBS = (
 )
 
 
-def classify(text: str) -> list[str]:
-    """Return the categories `text` falls into, in `CATEGORIES` order."""
-    found: list[str] = []
-    if _TAG_RE.search(text):
-        found.append("tag_question")
-    if _is_answer_menu(text):
-        found.append("answer_menu")
-    if _PRESUPPOSITION_RE.search(text):
-        found.append("presupposition")
-    if "?" not in text:
-        found.append("advisory")
-    return found
-
-
 def _is_answer_menu(text: str) -> bool:
     """A parenthetical enumerating ≥2 candidate answers, instructions aside."""
     for inner in _PAREN_RE.findall(text):
@@ -78,6 +69,23 @@ def _is_answer_menu(text: str) -> bool:
         if inner.count(",") >= 1:
             return True
     return False
+
+
+#: One predicate per `CATEGORIES` entry. `classify` iterates `CATEGORIES`
+#: itself rather than a hand-ordered sequence of `if`s, so the emitted order
+#: is structural — a category can't land out of `CATEGORIES`' order, and a
+#: predicate with no entry here simply can't be checked.
+_PREDICATES: dict[str, Callable[[str], bool]] = {
+    "tag_question": lambda text: bool(_TAG_RE.search(text)),
+    "answer_menu": _is_answer_menu,
+    "presupposition": lambda text: bool(_PRESUPPOSITION_RE.search(text)),
+    "advisory": lambda text: "?" not in text,
+}
+
+
+def classify(text: str) -> list[str]:
+    """Return the categories `text` falls into, in `CATEGORIES` order."""
+    return [category for category in CATEGORIES if _PREDICATES[category](text)]
 
 
 @dataclass(frozen=True)
@@ -175,6 +183,12 @@ def _report(frames_dir: Path) -> None:
             print(f"    never issued: {note}")
         advisory_only = len(flagged) - len(leading)
         print(f"    leading: {len(leading)}   advisory-only: {advisory_only}")
+        counts = {
+            category: sum(1 for q in audit.questions if category in q.categories)
+            for category in CATEGORIES
+        }
+        by_category = ", ".join(f"{c}={counts[c]}" for c in CATEGORIES)
+        print(f"    by category: {by_category}")
         for q in flagged:
             print(f"      {q.question_id}  [{', '.join(q.categories)}]")
 
