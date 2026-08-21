@@ -14,6 +14,7 @@ instead of surfacing inside an expensive benchmark run.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -85,6 +86,7 @@ class QuestionAudit:
 
     question_id: str
     coverage_key: str
+    text: str
     categories: list[str] = field(default_factory=list)
 
 
@@ -102,7 +104,7 @@ def audit_frame(frame: str, frames_dir: Path) -> FrameAudit:
     """Classify `frame`'s issued questions and report its coverage claims."""
     source = BankQuestionSource(pin="audit", frames_dir=frames_dir)
     questions = [
-        QuestionAudit(q.question_id, q.coverage_key, classify(q.text))
+        QuestionAudit(q.question_id, q.coverage_key, q.text, classify(q.text))
         for q in source.questions(frame)
     ]
     topics = parse_frame((frames_dir / f"{frame}.md").read_text(encoding="utf-8"))
@@ -128,16 +130,30 @@ PINNED = (
 )
 
 
+def _digest(text: str) -> str:
+    """First 12 hex characters of `text`'s sha256 — enough to catch a reword,
+    short enough that the baseline diff stays readable."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
 def snapshot(frames_dir: Path) -> dict:
-    """JSON-able classification of both frames, plus the contract pin."""
+    """JSON-able classification of both frames, plus the contract pin.
+
+    `digests` covers every issued question, not only the flagged ones: a
+    reworded question that no rule matches still moves its digest, so a
+    silent wording change fails the baseline test instead of passing
+    unnoticed.
+    """
     frames = {}
     for frame in ("customer", "engineer"):
         audit = audit_frame(frame, frames_dir)
+        flagged = [q for q in audit.questions if q.categories]
+        leading = [q for q in flagged if q.categories != ["advisory"]]
         frames[frame] = {
             "issued": len(audit.questions),
-            "questions": {
-                q.question_id: q.categories for q in audit.questions if q.categories
-            },
+            "leading": len(leading),
+            "digests": {q.question_id: _digest(q.text) for q in audit.questions},
+            "questions": {q.question_id: q.categories for q in flagged},
             "claimed": audit.claimed,
             "unissued_topics": audit.unissued_topics,
         }

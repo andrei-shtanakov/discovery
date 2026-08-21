@@ -84,6 +84,50 @@ class TestBaseline:
         current = bank_audit.snapshot(FRAMES)
         assert current["pin"], "a snapshot without its pin cannot be attributed"
 
+    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 15)])
+    def test_digests_cover_exactly_the_issued_questions(self, frame, issued):
+        current = bank_audit.snapshot(FRAMES)
+        assert len(current["frames"][frame]["digests"]) == issued
+
+    def test_leading_count_excludes_advisory_only_questions(self):
+        current = bank_audit.snapshot(FRAMES)
+        # customer: personas.01 + nfr.02 are answer_menu (leading); jobs.01 is
+        # advisory-only and must not be counted.
+        assert current["frames"]["customer"]["leading"] == 2
+        # engineer: interfaces.01 is answer_menu (leading); feasibility_review
+        # .02/.03 are advisory-only and must not be counted.
+        assert current["frames"]["engineer"]["leading"] == 1
+
+    def test_rewording_an_unflagged_question_changes_the_snapshot(self, tmp_path):
+        """A reworded question that no rule matches must still fail the
+        baseline: `snapshot()` digests every issued question, not only the
+        flagged ones. Reworded into something a human would call leading
+        (a tag question), to prove the hole the reviewer found is closed."""
+        rigged = tmp_path / "frames"
+        rigged.mkdir()
+        for name in ("customer.md", "engineer.md"):
+            (rigged / name).write_text(
+                (FRAMES / name).read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        original = (
+            "- Какую проблему решаем? Как это болит сегодня — на конкретном "
+            "недавнем примере?"
+        )
+        reworded = "- Это ведь и есть проблема, не так ли?"
+        customer_text = (rigged / "customer.md").read_text(encoding="utf-8")
+        assert customer_text.count(original) == 1
+        (rigged / "customer.md").write_text(
+            customer_text.replace(original, reworded, 1), encoding="utf-8"
+        )
+
+        rigged_snapshot = bank_audit.snapshot(rigged)
+        real_snapshot = bank_audit.snapshot(FRAMES)
+        assert rigged_snapshot != real_snapshot
+        assert (
+            rigged_snapshot["frames"]["customer"]["digests"]["customer.goals.01"]
+            != real_snapshot["frames"]["customer"]["digests"]["customer.goals.01"]
+        )
+
 
 class TestCLI:
     def test_documented_invocation_prints_the_report(self, monkeypatch, capsys):
