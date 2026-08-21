@@ -121,4 +121,5 @@ Must-FR received no verdict.
 
 - Design: `docs/superpowers/specs/2026-08-18-discovery-runtime-design.md`
 - Acceptance evidence: `docs/evidence/`
+- Orchestrated-run preflight and traps: `docs/runbooks/orchestrated-run-preflight.md`
 - Plan of record: `TODO.md`

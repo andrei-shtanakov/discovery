@@ -185,8 +185,20 @@
       с нулём находок, блок дописывался только при непустом наборе.
 - [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests
 - [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark
-      План §3: прогон живёт в нетрекаемом стенде `discovery-test`, фикстуры L0/L1 — в
-      тестах репо. Раньше runtime мерить нечего.
+      Прогон живёт в стенде `../discovery-test` — **локальном git-репо без remote**
+      и вне fleet manifest (прежняя формулировка «нетрекаемый стенд» неверна:
+      история там есть, наружу её нет); фикстуры L0/L1 — в тестах этого репо.
+      Спека: `docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md`,
+      план: `docs/superpowers/plans/2026-08-21-l3-quality-benchmark.md`.
+      **Состояние на 2026-08-21.** Part A (аудит банка вопросов, `tools/bank_audit.py`,
+      PR #19) и Part B (код стенда: роли, leakage, петля, метрики, отчёт, раннер)
+      закрыты. Открыто и требует владельца: B6 — выбор внешнего документа, прогон
+      LLM-разметчика и слепая ручная разметка; **CP-1** — human adjudication
+      (`ground-truth.yaml`, гейт всех recall-метрик); **CP-2** — калибровка
+      matcher/judge до публикации `BASELINE.md`; живые прогоны S1/S2/S3.
+      Долг доков: спека §4 утверждает, что структурное раскрытие детектируется
+      детерминированно — замер на held-out показал 0/10; и фикстуры плана с id в
+      обратных кавычках линтер не парсит.
 - [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:phase-3-grounding
       Это же место пересечения с Robin — см. раздел ниже.
       **Свободным не считать (зафиксировано 2026-08-21).** Тегов не было ни
