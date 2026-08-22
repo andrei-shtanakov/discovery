@@ -1889,6 +1889,13 @@ git add -A && git commit -m "feat(metrics): extraction-recall и три клас
 
 ### Task B8: the approval fixture and the T2 metrics
 
+> **Правка 2026-08-22 (замер).** Фикстуры этой задачи пишут id в обратных
+> кавычках (`` `FR-10` ``), а вендоренный линтер такую строку не парсит — он
+> ждёт **полужирную** форму (`**FR-10**`), как в §2 контракта. Реализация в
+> стенде использует полужирную (`tests/test_feasibility.py`). Сами фикстуры
+> плана задним числом не правлены: план остаётся тем, что было написано до
+> исполнения, а расхождение зафиксировано здесь.
+
 **Files:**
 - Create: `../discovery-test/l3bench/approval.py`, `l3bench/metrics/feasibility.py`
 - Test: `../discovery-test/tests/test_approval.py`, `tests/test_feasibility.py`

@@ -111,13 +111,30 @@ command: the harness writes the payload to a file and the caller passes
 **Absence of tools is not absence of leakage.** A simulator can quote its hidden
 spec verbatim in an ordinary reply. A deterministic leakage check compares each
 simulator utterance against the hidden spec — a shared shingle of at least
-`leak_shingle_tokens` tokens, or structural disclosure (dumping the requirement
-list or its ids) — and its parameters are pinned in the stand's `config.toml`.
-This document fixes the method and the requirement that the parameters be pinned
-and versioned; the implementation plan chooses `leak_shingle_tokens` and
-enumerates the structural forms, and changing either is a configuration change
-carrying its own hash in the run manifest. A detected leak marks the run
-`invalid_leak`, and it never improves recall.
+`leak_shingle_tokens` tokens, or a verbatim dump of the requirement ids — and its
+parameters are pinned in the stand's `config.toml`. This document fixes the
+method and the requirement that the parameters be pinned and versioned; the
+implementation plan chooses `leak_shingle_tokens` and the id threshold, and
+changing either is a configuration change carrying its own hash in the run
+manifest. A detected leak of either kind marks the run `invalid_leak`, and it
+never improves recall.
+
+**Structural disclosure is not deterministically detectable, and this document
+was wrong to imply it was** (corrected 2026-08-22, after measurement). A
+simulator naming the apparatus it is reading from — "сверюсь со своей
+спецификацией" — is a real leak, but recognising it in general is a judgement
+about meaning, not a comparison against the spec's own bytes. The stand's rule
+for it is a known-vocabulary matcher over artifact nouns and disclosure
+framings; two measurements bound what it is worth. Against an independently
+written held-out set naming artifacts outside its vocabulary it caught **0 of
+10** slips while staying clean on all 10 innocents. On the first live S3 run it
+fired on an innocent stakeholder sentence — attached documents plus "нет перед
+глазами" — and discarded a whole interview. Recall that does not generalize and
+precision that fails in production together support flagging, not discarding:
+a structural hit is therefore **an observation published per run**
+(`structural_flags`), never a reason to invalidate. Only the two rules with
+byte-level evidence invalidate. Detecting the concept itself would need a judge,
+which this check deliberately is not.
 
 **`--model` is a selection, not an immutable pin**, until the provider exposes a
 finer revision. The manifest stores both the CLI argument and the `model`
@@ -242,6 +259,15 @@ rates of their own**: `valid_run_rate`, `invalid_leak_rate`,
 `harness_error_rate`, and for S2 `upstream_completion_rate`. Without them, a
 caller that frequently leaks the spec or fails to produce a customer brief would
 improve the headline numbers by having its bad runs discarded.
+
+A run that reaches the end of the interview but produces **no brief** is a
+`harness_error`, not an `ok` run with fewer metrics. Measured 2026-08-22: the
+first completing S3 run reported `ok` and `valid_run_rate: 1.0` while every
+metric module was skipped, because nothing in the loop had asked the caller for
+the brief. A validity rate that counts such a run as valid says the opposite of
+what it means, so "ok" carries the obligation that there is something to score.
+`structural_flags` is published alongside these rates: an observation per run,
+not a validity verdict (§4).
 
 ### 7.3 The judge does not set truth alone
 
