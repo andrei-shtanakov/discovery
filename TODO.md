@@ -183,8 +183,8 @@
       правило такого класса, ничего о нём не зная.
       Shipped-инстансов не было: три брифа в `dispatcher` — `validation: pass`
       с нулём находок, блок дописывался только при непустом наборе.
-- [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests
-- [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark
+- [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests @epic:eco.discovery-runtime
+- [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark @epic:eco.discovery-runtime
       Прогон живёт в стенде `../discovery-test` — **локальном git-репо без remote**
       и вне fleet manifest (прежняя формулировка «нетрекаемый стенд» неверна:
       история там есть, наружу её нет); фикстуры L0/L1 — в тестах этого репо.
@@ -201,7 +201,7 @@
       прогон по ложному срабатыванию — структурное правило понижено до наблюдения;
       петля не запрашивала бриф, поэтому законченный прогон отчитывался `ok` с нулём
       метрик. Все три починены с регрессиями, спека §4/§7.2 приведена в соответствие.
-- [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:phase-3-grounding
+- [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:phase-3-grounding @epic:eco.discovery-runtime
       Это же место пересечения с Robin — см. раздел ниже.
       **Свободным не считать (зафиксировано 2026-08-21).** Тегов не было ни
       одного, и пункт выглядел ничем не связанным — на деле решение о фазе 3
@@ -219,7 +219,7 @@
       Дизайн L3 отмечает то же самое с другой стороны: фаза 3 — **потребитель**
       baseline'а, а не его часть
       (`docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md` §10).
-- [ ] Политика приватности `interview.sessions`: хранить роли, не имена @owner:github:andrei-shtanakov @trigger:"первое интервью с сотрудником, а не с заказчиком" @id:employee-interview-privacy-policy
+- [ ] Политика приватности `interview.sessions`: хранить роли, не имена @owner:github:andrei-shtanakov @trigger:"первое интервью с сотрудником, а не с заказчиком" @id:employee-interview-privacy-policy @epic:eco.discovery-runtime
       ADR «Последствия» §5: провенанс «кто что сказал» при опросе сотрудников
       чувствителен, и решать это надо до пилота, а не после.
 - [x] Engineer-фрейм не может достичь `readiness: ready`: `feasibility_review` рантайм не выводит @owner:github:andrei-shtanakov @id:feasibility-review-not-derived
@@ -244,7 +244,7 @@
       engineer-прогон перестанет возвращать 0 когда бы то ни было. Чинить зеркалированием
       GC-05(engineer): резолвить upstream-бриф по `traces_to` от `base_dir` и считать ключ
       `covered`, когда каждый upstream Must-FR упомянут в теле.
-- [ ] Стенд L3 свеж относительно текущей конфигурации @owner:github:andrei-shtanakov @trigger:"изменился любой эффективный вход манифеста: пин банка/контракта, промпты (caller, simulator, judge, matcher, annotator), config.toml, пин методики, сценарий, ground truth, ревизия харнесса, версия Claude Code, model selection" @id:l3-stand-freshness
+- [ ] Стенд L3 свеж относительно текущей конфигурации @owner:github:andrei-shtanakov @trigger:"изменился любой эффективный вход манифеста: пин банка/контракта, промпты (caller, simulator, judge, matcher, annotator), config.toml, пин методики, сценарий, ground truth, ревизия харнесса, версия Claude Code, model selection" @id:l3-stand-freshness @epic:eco.discovery-runtime
       Стенд `../discovery-test` — локальный репо без remote и без CI, поэтому
       протухает молча: ни дайджест Robin, ни plan-check его не видят.
       Проверка: `uv run python ../discovery-test/tools/freshness.py` — сверяет
