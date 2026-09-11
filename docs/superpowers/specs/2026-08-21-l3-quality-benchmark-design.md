@@ -232,8 +232,12 @@ left without a verdict at T2 are different defects with different owners.
 
 | Metric | Transition | Computed by | Denominator |
 |---|---|---|---|
-| extraction-recall | source → customer brief | matcher, mapping `GT-id → entry-id` with an evidence quotation | canonical ground truth |
-| invention-rate | same | matcher classification (§7.1) | brief entries |
+| extraction-recall | source → customer brief | matcher, forward pass `GT-id → entry-id` with an evidence quotation | canonical ground truth |
+| recall-ambiguous-rate | same | forward pass, `ambiguous` verdicts | canonical ground truth |
+| requirement-invention-rate | same | matcher, **reverse pass** `entry-id → GT-id`, one verdict per brief requirement (§7.1) | brief requirements (FR/NFR/CON, unique ids) |
+| requirement-ambiguous-rate | same | reverse pass, `ambiguous` verdicts | brief requirements |
+| unanchored-entry-rate | same | share of brief entries no forward verdict cited — "not chosen", not "judged unsupported" | brief entries |
+| entries.\<type\> | same | counts per entry type (G/J/P/FR/NFR/CON/M/OUT/S/IF/AP/RK/Q/X) | — |
 | feasibility-coverage | approved customer brief → engineer brief | the **vendored linter's** GC-05(engineer) id set, projected to a ratio | upstream Must-FRs |
 | traceability | same | linter: `traces` resolve | engineer-brief FRs |
 | contradiction-recall | S3 | `X-NN` with `status: open` — deterministic; whether it is the seeded contradiction — judge | seeded contradictions |
@@ -245,12 +249,40 @@ mentioned by id in the engineer brief's body. The harness only projects that
 same id set into a ratio — mentioned Must-FRs over all upstream Must-FRs — and
 never redefines the rule.
 
-### 7.1 Matcher classes
+### 7.1 Matcher classes and the two directions
 
 The matcher returns three classes, not two: **supported**, **unsupported**,
 **ambiguous**. `ambiguous` is published separately and is never counted as
 invention automatically — an incomplete canonical ground truth would otherwise
 become a false accusation against the model.
+
+**Compare only objects of one class** (decided 2026-09-11 after the first live
+S1). The ground truth is the adjudicated list of *requirements* and stays so;
+goals, jobs, personas, metrics, risks, scope and interfaces (G/J/P/M/RK/OUT/IF)
+are other entities and are published as the brief's composition — counts per
+type — never judged against a requirement list. Extending the ground truth to
+them would turn "invented requirements" into "unconfirmed statements of any
+kind" and would need a new annotation and adjudication round.
+
+Two passes, two denominators, never summed:
+
+- **forward**, `GT → brief`: one verdict per ground-truth item →
+  `extraction_recall`, `recall_ambiguous_rate`;
+- **reverse**, `brief requirement → GT`: one verdict per unique FR/NFR/CON
+  entry of the brief → `requirement_invention_rate`, `requirement_ambiguous_rate`.
+
+The first live S1 published `invention_rate = 0.48` that was almost entirely
+G/J/RK/OUT entries no forward verdict had cited — "not chosen by the matcher",
+not "judged unsupported". That number survives as `unanchored_entry_rate`,
+named for what it measures.
+
+**Repeated entry ids invalidate the input.** The same run rendered 83 entry
+instances over 76 unique ids (FR-01 declared in three answers; the runtime
+renders every instance). Versions of one id may differ in text and Priority,
+so which one a verdict cites is undefined: scoring refuses the brief before
+spending a token, and never deduplicates on the quiet. Whether the runtime
+should refuse or supersede a re-declared id at `answer` time is a question
+for the runtime (`TODO.md`, `@id:duplicate-entry-ids-across-answers`).
 
 ### 7.2 Validity metrics
 
