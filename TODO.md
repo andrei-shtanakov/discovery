@@ -216,7 +216,17 @@
       `unmarked_submissions`). 190 тестов. Манифесты есть только у S1 и S3, и оба
       STALE (версия Claude Code, ревизия discovery и харнеса) — до baseline
       перегонять и S3; S2 по §6.2 цепляется от брифа S1 и не запускался.
-      Следующий шаг — живой `S1-customer --repetitions 1` под `uv run`.
+      **Первый полный живой S1 — 2026-09-11** (`runs/20260911T143421Z-00`, стенд
+      `cae6355`): state ok, 19 ходов, бриф написан рантаймом, дрейфа caller'а 0.
+      Гейт fail по вине caller'а, не рантайма (GC-08 ×6 — NFR без Acceptance/Target,
+      GC-06 — FR-10 без трассы). Скоринг упал на ```yaml-ограждении ответа
+      matcher'а — починено в стенде (`918321a`), числа получены переигрыванием
+      сохранённого ответа: GT 103, записей 83; extraction_recall 0.456,
+      invention_rate 0.482, ambiguous_rate 0.233; ≈ $9.3 и 1 ч 15 мин.
+      **Вопрос к CP-2 до серии `--repetitions 5`:** invention_rate считает
+      изобретением 39 незаякоренных записей G/J/RK/OUT, которых в GT из одних
+      требований быть не могло — либо дополнять GT, либо считать invention по
+      FR/NFR/CON. Серия раньше решения будет мерить артефакт метрики.
 - [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:phase-3-grounding @epic:eco.discovery-runtime
       Это же место пересечения с Robin — см. раздел ниже.
       **Свободным не считать (зафиксировано 2026-08-21).** Тегов не было ни
