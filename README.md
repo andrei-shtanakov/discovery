@@ -32,6 +32,15 @@ discovery brief  --session <id> --out <brief_path>
 `--file -` reads the payload from stdin. Omitting `--question` answers whichever
 question the session is currently waiting on.
 
+An entry id may be declared again in a **later** answer: that is an explicit new
+version and replaces the earlier one whole — no field merging, so a version that
+dropped `Priority` or `traces` is a version without them and the linter says so.
+The replacement is recorded on the same `answer_recorded` event as
+`replaces_entries: [{entry_id, previous_question_id, previous_answer_id}]`.
+Declaring one id twice **inside one** payload is a malformed payload (exit 1,
+journal unchanged). Render, readiness and the gate all read one projection:
+latest answer per question, then the latest version of each entry id.
+
 The interview survives process boundaries: `start` issues the first question
 and exits, and a later `status` in a **new** process resumes from the session
 journal. State lives under `$DISCOVERY_HOME/sessions/<id>/` (default
