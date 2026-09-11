@@ -72,7 +72,7 @@ def parse_payload(raw: str) -> AnswerPayload:
 
     Raises `PayloadInvalid` on a YAML syntax error, a non-mapping document,
     a missing `text` key, a non-list `entries` value, an entry without an
-    `id`, or an entry `id` not matching `ID_RE`.
+    `id`, an entry `id` not matching `ID_RE`, or one id declared twice.
     """
     try:
         doc = yaml.safe_load(raw)
@@ -85,4 +85,20 @@ def parse_payload(raw: str) -> AnswerPayload:
     if not isinstance(raw_entries, list):
         raise PayloadInvalid(f"entries must be a list: {raw_entries!r}")
     entries = [_parse_entry(item) for item in raw_entries]
+    _refuse_duplicate_ids(entries)
     return AnswerPayload(text=text, entries=entries)
+
+
+def _refuse_duplicate_ids(entries: list[Entry]) -> None:
+    """One id at most once per payload.
+
+    Two versions of one id in a single answer have no order between them
+    a reader could rely on; across answers a repeat is an explicit new
+    version (`render.effective_entries`), inside one it is a malformed
+    document and the journal stays untouched.
+    """
+    seen: set[str] = set()
+    for entry in entries:
+        if entry.eid in seen:
+            raise PayloadInvalid(f"entry id declared twice in one payload: {entry.eid}")
+        seen.add(entry.eid)

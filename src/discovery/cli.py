@@ -18,7 +18,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from discovery import protocol
+from discovery import protocol, render
 from discovery.gate import GateInvariantError, render_and_gate
 from discovery.hashing import answer_id
 from discovery.journal import (
@@ -29,7 +29,7 @@ from discovery.journal import (
     JournalUnreadable,
 )
 from discovery.lifecycle import AWAITING_INPUT, compute_lifecycle, next_question
-from discovery.payload import PayloadInvalid, parse_payload
+from discovery.payload import AnswerPayload, PayloadInvalid, parse_payload
 from discovery.protocol import Envelope
 from discovery.questions import QuestionSource
 from discovery.session import Session, SessionHeader, SessionUnreadable, write_artifact
@@ -186,6 +186,28 @@ def _refuse(
     )
 
 
+def _replacements(events: list[dict], target: str, payload: AnswerPayload) -> dict:
+    """`replaces_entries` for an answer that re-declares ids another
+    question's answer currently holds — recorded on the same
+    `answer_recorded` event, never as a second append a crash could split
+    off. The answer to `target` itself is left out: its previous version is
+    what `answer_superseded` already records. Empty → no key at all.
+    """
+    holders = render.entry_holders(events)
+    replaced = [
+        {
+            "entry_id": entry.eid,
+            "previous_question_id": question_id,
+            "previous_answer_id": previous_id,
+        }
+        for entry in payload.entries
+        if (held := holders.get(entry.eid)) is not None
+        for question_id, previous_id in [held]
+        if question_id != target
+    ]
+    return {"replaces_entries": replaced} if replaced else {}
+
+
 def cmd_answer(args: argparse.Namespace) -> int:
     """Resolve the target question, then no-op / refuse / record / supersede."""
     source = build_source()
@@ -208,21 +230,21 @@ def cmd_answer(args: argparse.Namespace) -> int:
         if args.file == "-"
         else Path(args.file).read_text(encoding="utf-8")
     )
-    parse_payload(raw)
+    payload = parse_payload(raw)
 
     new_id = answer_id(header.session_id, target, args.role, raw)
     existing = _latest_answer(events, target)
+    record = {
+        "event": ANSWER_RECORDED,
+        "question_id": target,
+        "participant_role": args.role,
+        "answer_id": new_id,
+        "payload": raw,
+        **_replacements(events, target, payload),
+    }
 
     if existing is None:
-        journal.append(
-            {
-                "event": ANSWER_RECORDED,
-                "question_id": target,
-                "participant_role": args.role,
-                "answer_id": new_id,
-                "payload": raw,
-            }
-        )
+        journal.append(record)
     elif existing.get("answer_id") == new_id:
         pass
     elif not args.supersede:
@@ -237,15 +259,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
                 "answer_id": existing.get("answer_id"),
             }
         )
-        journal.append(
-            {
-                "event": ANSWER_RECORDED,
-                "question_id": target,
-                "participant_role": args.role,
-                "answer_id": new_id,
-                "payload": raw,
-            }
-        )
+        journal.append(record)
 
     return _emit(_status_envelope(journal, header, source, args.session))
 

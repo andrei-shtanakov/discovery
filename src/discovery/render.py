@@ -78,12 +78,15 @@ class Entry:
 
 
 def _latest_answers(events: list[dict]) -> list[dict]:
-    """One entry per distinct question_id from answer_recorded events, latest wins."""
-    by_id: dict[str, dict] = {}
-    for event in events:
+    """One answer per distinct question_id, latest wins — in journal order
+    of the winning events, so a superseding answer appended later sorts
+    after answers to other questions recorded before it. That order is
+    what `effective_entries` means by "latest version of an entry"."""
+    by_id: dict[str, tuple[int, dict]] = {}
+    for index, event in enumerate(events):
         if event.get("event") == "answer_recorded":
-            by_id[event["question_id"]] = event
-    return list(by_id.values())
+            by_id[event["question_id"]] = (index, event)
+    return [event for _, event in sorted(by_id.values(), key=lambda pair: pair[0])]
 
 
 def _parse_payload(payload: str) -> dict[str, Any]:
@@ -91,17 +94,48 @@ def _parse_payload(payload: str) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _entries(events: list[dict]) -> list[Entry]:
-    """Typed entries from every latest answer's payload, in answer order."""
-    entries: list[Entry] = []
+def _declarations(events: list[dict]) -> list[tuple[dict, dict[str, Any]]]:
+    """Every `(answer event, raw entry)` from the latest answers, journal order."""
+    declared: list[tuple[dict, dict[str, Any]]] = []
     for answer in _latest_answers(events):
         parsed = _parse_payload(answer.get("payload", ""))
         for raw in parsed.get("entries") or []:
-            fields = {k: v for k, v in raw.items() if k not in ("id", "body")}
-            entries.append(
-                Entry(eid=raw["id"], body=raw.get("body", ""), fields=fields)
-            )
-    return entries
+            declared.append((answer, raw))
+    return declared
+
+
+def effective_entries(events: list[dict]) -> list[Entry]:
+    """The one projector of the journal into entries — render, readiness and
+    the gate all read this and nothing else.
+
+    Latest answer per question_id first, then, in journal order, the latest
+    declaration of each entry_id wins and replaces the earlier one **whole**:
+    no field merging, so a version that dropped Priority or traces is a
+    version without them and the linter says so. Order is first appearance.
+    Decided 2026-09-11 (`@id:duplicate-entry-ids-across-answers`) after a
+    live run rendered 83 instances over 76 ids.
+    """
+    latest: dict[str, Entry] = {}
+    for _, raw in _declarations(events):
+        fields = {k: v for k, v in raw.items() if k not in ("id", "body")}
+        latest[raw["id"]] = Entry(
+            eid=raw["id"], body=raw.get("body", ""), fields=fields
+        )
+    return list(latest.values())
+
+
+def entry_holders(events: list[dict]) -> dict[str, tuple[str, str]]:
+    """`entry_id -> (question_id, answer_id)` of the answer whose version is
+    effective, by the same projection as `effective_entries`."""
+    holders: dict[str, tuple[str, str]] = {}
+    for answer, raw in _declarations(events):
+        holders[raw["id"]] = (answer["question_id"], answer.get("answer_id", ""))
+    return holders
+
+
+# The historical name; every reader inside this module goes through the
+# projector above.
+_entries = effective_entries
 
 
 def _sessions(events: list[dict]) -> list[dict[str, str]]:

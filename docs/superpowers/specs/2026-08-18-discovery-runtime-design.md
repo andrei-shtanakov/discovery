@@ -155,6 +155,7 @@ not for the conversation:
 {"event":"question_asked","question_id":"customer.goals.01","coverage_key":"goals","question_text":"…","source_pin":"…","ts":"…"}
 {"event":"answer_recorded","question_id":"customer.goals.01","answer_id":"sha256:…","participant_role":"product","text":"…","ts":"…"}
 {"event":"answer_superseded","question_id":"customer.goals.01","from":"sha256:…","to":"sha256:…","ts":"…"}
+{"event":"answer_recorded","question_id":"customer.nfr.01","answer_id":"sha256:…","participant_role":"product","text":"…","replaces_entries":[{"entry_id":"FR-01","previous_question_id":"customer.functions.01","previous_answer_id":"sha256:…"}],"ts":"…"}
 {"event":"source_pin_changed","from":"…","to":"…","ts":"…"}
 ```
 
@@ -219,6 +220,20 @@ is refused unless `--supersede` is passed; with it, both
 `answer_superseded` and the new `answer_recorded` are appended, render uses the
 latest, and the journal keeps the history. Silent overwrite is the one behaviour
 excluded: it would make the transcript unable to explain its own brief.
+
+**Entries are versioned by id across answers** (decided 2026-09-11,
+`@id:duplicate-entry-ids-across-answers`, after a live run rendered 83 entry
+instances over 76 ids). `--supersede` addresses a *question*; an entry conflict
+is about an *entry*, and superseding another question's answer to fix one entry
+would delete that answer's unrelated entries. So: the same id in a later answer
+is an explicit new version that replaces the earlier one **whole** — no field
+merging, the linter catches a lost `Priority`, `Acceptance` or `traces`; the
+replacement is recorded on the same `answer_recorded` event as
+`replaces_entries` (one append, nothing a crash can split); two equal ids
+inside one payload are a malformed payload, refused with the journal untouched.
+Render, readiness and the gate read one projector (`render.effective_entries`):
+latest answer per `question_id`, then, in journal order, the latest version of
+each `entry_id`.
 
 **Lifecycle is a function of the journal**, and it is about the conversation,
 never about the artifact:
