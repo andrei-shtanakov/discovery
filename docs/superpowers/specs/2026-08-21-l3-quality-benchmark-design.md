@@ -256,9 +256,22 @@ become a false accusation against the model.
 
 Unsuccessful runs are excluded from the metric distributions but **published as
 rates of their own**: `valid_run_rate`, `invalid_leak_rate`,
-`harness_error_rate`, and for S2 `upstream_completion_rate`. Without them, a
-caller that frequently leaks the spec or fails to produce a customer brief would
-improve the headline numbers by having its bad runs discarded.
+`submission_failed_rate`, `harness_error_rate`, and for S2
+`upstream_completion_rate`. Without them, a caller that frequently leaks the
+spec or fails to produce a customer brief would improve the headline numbers by
+having its bad runs discarded.
+
+`submission_failed` is the runtime refusing an answer for good (the caller owns
+one `--supersede` retry inside the same invocation); it is kept apart from
+`harness_error` so a caller whose answers keep being rejected is visible as
+that, not buried under max-turns exhaustion. It is the runtime's verdict, not
+the caller's: when the caller does not print `<SUBMITTED>`, the loop compares
+the session journal's `answer_recorded` count before and after the call and
+only a journal that did not grow is a failure. Measured 2026-08-26: three S1
+runs ended `submission_failed` with every answer accepted, because the caller
+had printed `<QUESTION>` for `answer`'s exit 20. Turns accepted without the
+marker are counted in the manifest as `counters.unmarked_submissions` —
+evidence about the caller's protocol discipline, zero in a clean run.
 
 A run that reaches the end of the interview but produces **no brief** is a
 `harness_error`, not an `ok` run with fewer metrics. Measured 2026-08-22: the
@@ -304,8 +317,8 @@ digests. It also carries token and call counters and the paths to the full
 `stream-json` of every role. Money is not stored: tokens and calls are, and
 a separately pinned price table converts them.
 
-Run states: `ok`, `invalid_leak`, `blocked_by_upstream_run`, `harness_error`.
-The last three are retained in full.
+Run states: `ok`, `invalid_leak`, `submission_failed`, `blocked_by_upstream_run`,
+`harness_error`. All but `ok` are retained in full.
 
 ## 9. The observability item
 

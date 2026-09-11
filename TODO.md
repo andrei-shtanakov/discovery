@@ -212,8 +212,10 @@
       Починено в стенде (коммиты `a1806ae` evidence, `f8f37f7` fix): приём ответа
       сверяется по журналу сессии, дрейф считается в `counters.unmarked_submissions`
       манифеста; STATUS без `session=`; fail-fast, если `discovery` на PATH — не из
-      `.venv` стенда. 190 тестов. Стенд STALE по обоим сценариям (версия Claude
-      Code, ревизия discovery и харнеса) — до baseline перегонять и S3.
+      `.venv` стенда; спека §7.2/§8 догнала стенд (`submission_failed`,
+      `unmarked_submissions`). 190 тестов. Манифесты есть только у S1 и S3, и оба
+      STALE (версия Claude Code, ревизия discovery и харнеса) — до baseline
+      перегонять и S3; S2 по §6.2 цепляется от брифа S1 и не запускался.
       Следующий шаг — живой `S1-customer --repetitions 1` под `uv run`.
 - [ ] Фаза 3 (grounding): чтение `../prograph-vault` перед интервью, чтобы не спрашивать уже известное; `traces_to` на KB @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:phase-3-grounding @epic:eco.discovery-runtime
       Это же место пересечения с Robin — см. раздел ниже.
