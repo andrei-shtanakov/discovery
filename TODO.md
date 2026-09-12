@@ -246,8 +246,18 @@
       готового прогона без интервью, `metrics.json` + `scored_with`). Числа:
       extraction_recall 0.485 (ambiguous 0.146), requirement_invention_rate
       0.156 (ambiguous 0.125, 32 требования), unanchored_entry_rate 0.531.
-      **Серия ×5 запущена 2026-09-11 ~18:21Z**; baseline публиковать после
-      CP-2 (§7.3).
+      **Серия ×5 закрыта 2026-09-12** (стенд `fbe5339`): все пять `ok`, 19
+      ходов, дрейф caller'а 0; exit по прогонам 11/0/0/10/10. Агрегат
+      (`tools/aggregate.py`): extraction_recall median 0.427 [0.369, 0.456],
+      recall_ambiguous 0.272, requirement_invention_rate 0.125 [0.091, 0.174],
+      requirement_ambiguous 0.136 [0.059, 0.394], unanchored 0.495. Серия
+      умирала на скоринге 3-го прогона (невалидный YAML matcher'а) — стенд
+      `96da762`: отказ скоринга пишется в `scoring-error.txt` и не убивает
+      серию, `metrics.json` на каждый прогон, `tools/aggregate.py`,
+      `evidence` только блочным скаляром. Цена серии ≈ $45.
+      **Не baseline:** `BASELINE.md` — только после CP-2 (§7.3). Открыто:
+      CP-2 (калибровка matcher/judge; самая шумная ось —
+      requirement_ambiguous 0.06–0.39), затем публикация baseline и перегон S3.
 - [x] Повтор entry id между ответами: рантайм рендерит каждый экземпляр, линтер правила не имеет — решить, отказывать ли на `answer` или считать последнюю версию по id @owner:github:andrei-shtanakov @id:duplicate-entry-ids-across-answers @epic:eco.discovery-runtime
       **Решено и сделано 2026-09-11 (PR #35): «последняя полная версия по id
       побеждает».** Отказ на межответный дубль отвергнут: `--supersede` адресует
