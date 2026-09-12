@@ -194,7 +194,22 @@
       поправкой по классам recall 0.50 [0.46, 0.52], invention 0.10 [0.06, 0.12].
       Порог не выводится (§7.3). Leading-question rate — слой A (`bank_audit`,
       PR #19); anti-sycophancy — только через S3, см. следующий пункт.
-- [ ] L3, вторая волна: перегон S3 на текущей конфигурации с калибровкой judge (anti-sycophancy), цепочка S2 (engineer, feasibility), батчирование matcher'а по GT @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:l3-second-wave @epic:eco.discovery-runtime
+- [x] L3, вторая волна: перегон S3 на текущей конфигурации с калибровкой judge (anti-sycophancy), цепочка S2 (engineer, feasibility), батчирование matcher'а по GT @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:l3-second-wave @epic:eco.discovery-runtime
+      **Закрыта 2026-09-12 (PR #39), дополнение в `discovery-test/BASELINE.md` @
+      `e0fda4b`.** Батчирование: 20 на вызов, повтор пакета при пропуске id или
+      цитаты; смена прибора — тот же прогон 0.485 → 0.408 recall, режим назван в
+      baseline. S3 ×3: recall 0.0/1.0/0.5 машиной, 0.0/0.5/0.5 по владельцу;
+      судья откалиброван (10 пар, 0.90; одно ложное «да»). S2 ×1: upstream exit 11,
+      engineer exit 10 — feasibility_coverage 0.0 (Must-FR upstream ни разу не
+      названы по id), traceability по GC-13 0.36 (все IF без traces → S). Два
+      дефекта стенда вскрыты этим прогоном и починены до публикации (фикстура
+      скорилась против себя; traceability по FR при их отсутствии). Спека §7/§7.1/§7.3
+      обновлены.
+- [ ] L3, третья волна — caller: engineer-фрейм называет upstream Must-FR по id с вердиктом и трассирует IF → S; поднятый конфликт переписывается в resolved только по причине, не по настойчивости; затем S2 ×1 и S3 ×3, вторая выборка судьи @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-second-wave @id:l3-third-wave @epic:eco.discovery-runtime
+      Оба провала второй волны — caller'а, не рантайма: гейт рантайма назвал их
+      точно (GC-05 ×3, GC-13 ×7 в S2; «resolved» по настойчивости в S3 прогоне 1).
+      Правки только в `prompts/caller.md` стенда, рантайм не трогать. Порядок и
+      критерии — `BASELINE.md`, «What to do next».
       Baseline закрыт по S1; S3 протух по всем осям (три живых прогона августа,
       судья без калибровки), S2 не запускался. Порядок: S3 ×3 → выборка решений
       judge в `calibrate.py` (сейчас там только matcher) → S2 от брифа S1 с

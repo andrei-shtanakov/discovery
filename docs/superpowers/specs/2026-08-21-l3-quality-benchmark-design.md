@@ -239,7 +239,7 @@ left without a verdict at T2 are different defects with different owners.
 | unanchored-entry-rate | same | share of brief entries no forward verdict cited — "not chosen", not "judged unsupported" | brief entries |
 | entries.\<type\> | same | counts per entry type (G/J/P/FR/NFR/CON/M/OUT/S/IF/AP/RK/Q/X) | — |
 | feasibility-coverage | approved customer brief → engineer brief | the **vendored linter's** GC-05(engineer) id set, projected to a ratio | upstream Must-FRs |
-| traceability | same | linter: `traces` resolve | engineer-brief FRs |
+| traceability | same | linter: `traces` resolve by GC-06 (FR → G/J) and GC-13 (IF → S, AP → S/CON) | the brief's governed entries; absent, never 0, when there are none (the engineer frame has no FRs by construction — measured 2026-09-12) |
 | contradiction-recall | S3 | `X-NN` with `status: open` — deterministic; whether it is the seeded contradiction — judge | seeded contradictions |
 | length and cost | all | utterances, questions issued, tokens per role, wall time | — |
 
@@ -255,6 +255,14 @@ The matcher returns three classes, not two: **supported**, **unsupported**,
 **ambiguous**. `ambiguous` is published separately and is never counted as
 invention automatically — an incomplete canonical ground truth would otherwise
 become a false accusation against the model.
+
+**The matcher is called in batches** (`config.toml [scoring]`, from
+2026-09-12): one call over 103 items broke in form in three of eight
+scorings; batches of 20 with one retry per batch on a dropped id or a
+missing citation did not. Batch size is an effective input of a scoring and
+a change of instrument: the same run scored in one call and in batches gave
+`extraction_recall` 0.485 and 0.408. A baseline names the mode it was
+scored under, and numbers are compared across modes only by saying so.
 
 **Compare only objects of one class** (decided 2026-09-11 after the first live
 S1). The ground truth is the adjudicated list of *requirements* and stays so;
@@ -321,6 +329,15 @@ annotation and the `GT-id → entry-id` matching — the second is no less
 contestable than the first — and reports human–LLM agreement for both, plus the
 sensitivity of the result to the disputed requirements. No automatic pass/fail
 threshold is derived from the judge in v1.
+
+Measured (`discovery-test/BASELINE.md`): CP-1 0.67; CP-2 matcher 0.60 over 30
+decisions — conservative, two thirds of its forward `ambiguous` the owner
+called `supported`, so the headline understates recall (adjusted 0.50 against
+0.427 as scored) and overstates invention (0.10 against 0.125); the judge 0.90
+over 10 seed × conflict pairs — exact on "not the same", one false "yes" when
+one side of the seed was recognisable. Every judge decision is recorded with
+its inputs (`roles/judge/judgements.yaml`) so the next sample needs no
+reconstruction.
 
 ## 8. Artifacts and reproducibility
 
