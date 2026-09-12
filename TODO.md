@@ -184,7 +184,23 @@
       Shipped-инстансов не было: три брифа в `dispatcher` — `validation: pass`
       с нулём находок, блок дописывался только при непустом наборе.
 - [ ] L2-тесты `transcript → brief` (ассерты на свойства брифа, не на текст) @owner:github:andrei-shtanakov @trigger:"накопились 2–3 замороженных транскрипта интервью" @id:l2-transcript-brief-tests @epic:eco.discovery-runtime
-- [ ] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark @epic:eco.discovery-runtime
+- [x] L3-бенчмарк качества интервью на ATP: симулятор со скрытой спекой, метрики coverage-recall / anti-sycophancy / leading-question rate @owner:github:andrei-shtanakov @trigger:"появился работающий runtime" @id:l3-quality-benchmark @epic:eco.discovery-runtime
+      **Закрыт 2026-09-12 (PR #38): baseline опубликован** — стенд
+      `discovery-test/BASELINE.md` @ `fdb9759`. S1-customer, серия ×5, все `ok`:
+      extraction_recall 0.427 [0.369, 0.456], requirement_invention_rate 0.125
+      [0.091, 0.174]; CP-1 (ground truth) human–LLM agreement 0.67; CP-2
+      (matcher, 30 слепых решений владельца, `tools/calibrate.py`) 0.60 —
+      matcher консервативен (2/3 его ambiguous человек назвал supported), с
+      поправкой по классам recall 0.50 [0.46, 0.52], invention 0.10 [0.06, 0.12].
+      Порог не выводится (§7.3). Leading-question rate — слой A (`bank_audit`,
+      PR #19); anti-sycophancy — только через S3, см. следующий пункт.
+- [ ] L3, вторая волна: перегон S3 на текущей конфигурации с калибровкой judge (anti-sycophancy), цепочка S2 (engineer, feasibility), батчирование matcher'а по GT @owner:github:andrei-shtanakov @blocked_by:todo://discovery/l3-quality-benchmark @id:l3-second-wave @epic:eco.discovery-runtime
+      Baseline закрыт по S1; S3 протух по всем осям (три живых прогона августа,
+      судья без калибровки), S2 не запускался. Порядок: S3 ×3 → выборка решений
+      judge в `calibrate.py` (сейчас там только matcher) → S2 от брифа S1 с
+      exit 0 (их два в серии) → дополнить `BASELINE.md`. Отдельно: matcher на
+      103 GT одним вызовом ломается по форме в 3 из 8 скорингов — батчирование
+      или ретрай по покрытию до второй волны, чтобы не пересчитывать руками.
       Прогон живёт в стенде `../discovery-test` — **локальном git-репо без remote**
       и вне fleet manifest (прежняя формулировка «нетрекаемый стенд» неверна:
       история там есть, наружу её нет); фикстуры L0/L1 — в тестах этого репо.
