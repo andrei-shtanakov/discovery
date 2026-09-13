@@ -401,13 +401,15 @@
       Несовпадение означает «для текущей конфигурации прогона нет» — дата не
       доказывает ничего. Спека: `docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md` §9.
 - [x] `freshness.py`: ревизию рантайма считать по дереву `src/discovery`, а не по HEAD репо @owner:github:andrei-shtanakov @id:l3-freshness-runtime-tree @epic:eco.discovery-runtime
-      **Сделано 2026-09-13 (`discovery-test` @ `71e56cf`).** `discovery_revision`
+      **Сделано 2026-09-13 (`discovery-test` @ `4ebdc4b`).** `discovery_revision`
       теперь составлен из Git object id для `src/discovery`, `pyproject.toml` и
-      `uv.lock`; `harness_revision` — для `l3bench/`, `tools/`, `prompts/`,
-      `config.toml`, `pyproject.toml` и `uv.lock`. Старые манифесты с full commit
-      SHA не переписаны: checker проецирует их на те же пути в записанном
-      коммите; недоступный commit fail-closed остаётся расхождением. Регрессия
-      доказывает, что doc-only commit больше не делает legacy-run протухшим.
+      `uv.lock`; `harness_revision` — для `l3bench/`, `tools/run_benchmark.py`,
+      `prompts/`, `config.toml`, `pyproject.toml` и `uv.lock`. Вспомогательные
+      `freshness`/`rescore`/`calibrate` не исполняются интервью-прогоном и в
+      fingerprint не входят. Старые манифесты с full commit SHA не переписаны:
+      checker проецирует их на те же пути в записанном коммите; недоступный
+      commit fail-closed остаётся расхождением. Регрессия доказывает, что
+      doc-only commit больше не делает legacy-run протухшим.
       Незакоммиченные изменения любого revision-пути дают STALE, а запуск
       benchmark останавливается до первого LLM-вызова.
       До исправления все три сценария были помечены STALE, хотя `src/` не менялся
@@ -420,7 +422,8 @@
       дерево `src/discovery` (контракт уже внутри него) **вместе с** `pyproject.toml`
       и `uv.lock` — например `git rev-parse HEAD:src/discovery HEAD:pyproject.toml
       HEAD:uv.lock`, склеенные в одну ревизию; `harness_revision` — аналогично по
-      `l3bench/`, `tools/`, `prompts/`, `config.toml`, `pyproject.toml`, `uv.lock`.
+      `l3bench/`, `tools/run_benchmark.py`, `prompts/`, `config.toml`,
+      `pyproject.toml`, `uv.lock`.
       Критерий свежести по-прежнему проверяет каждый эффективный вход; поменялось
       только содержимое двух revision-значений. Правка живёт в стенде, здесь
       только учёт: стенд без remote и без плана.

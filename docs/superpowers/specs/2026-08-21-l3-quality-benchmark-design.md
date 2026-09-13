@@ -362,15 +362,17 @@ string, each role's model selection (the CLI argument **and** the identifier
 reported in `stream-json`), the methodology pin, and two composite Git-input
 revisions. `discovery_revision` contains the object ids of `src/discovery`,
 `pyproject.toml`, and `uv.lock`; `harness_revision` contains those of `l3bench`,
-`tools`, `prompts`, `config.toml`, `pyproject.toml`, and `uv.lock`. Thus a
-committed documentation-only change cannot invalidate a run, while a committed
-dependency or console-script change still does. Before computing either HEAD
-fingerprint, the checker requires every revision-path to be clean; uncommitted
-changes report STALE, and the benchmark runner stops before its first LLM call.
-Calling all of it "SHAs" would be wrong — a CLI version and a model identifier
-are values, not digests. It also carries token and call counters and the paths
-to the full `stream-json` of every role. Money is not stored: tokens and calls
-are, and a separately pinned price table converts them.
+`tools/run_benchmark.py`, `prompts`, `config.toml`, `pyproject.toml`, and
+`uv.lock`. Other tools (`freshness`, `rescore`, `calibrate`) are not executed by
+an interview run and do not invalidate its evidence. Thus a committed
+documentation-only change cannot invalidate a run, while a committed dependency
+or console-script change still does. Before computing either HEAD fingerprint,
+the checker requires every revision-path to be clean; uncommitted changes report
+STALE, and the benchmark runner stops before its first LLM call. Calling all of
+it "SHAs" would be wrong — a CLI version and a model identifier are values, not
+digests. It also carries token and call counters and the paths to the full
+`stream-json` of every role. Money is not stored: tokens and calls are, and a
+separately pinned price table converts them.
 
 Legacy manifests store a full commit SHA in each revision field. The freshness
 checker does not rewrite evidence: when that commit is still available locally,
@@ -383,13 +385,13 @@ Run states: `ok`, `invalid_leak`, `submission_failed`, `blocked_by_upstream_run`
 ## 9. The observability item
 
 A stand without a remote and without CI goes stale silently, so `TODO.md` gets
-one item with an `@owner:`, the command that reads the stand's last commit and
-its newest `run-manifest.json`, and a freshness criterion computed over **every
-effective input of the manifest**, comparing hashes where the input is a file
-and recorded values where it is not: bank/contract pin; the caller, simulator,
-judge, matcher and annotator prompts; `config.toml`; the methodology pin; the
-scenario and its ground truth; the harness revision; the Claude Code version;
-the runtime revision; and every model selection. The harness and runtime
+one item with an `@owner:`, the command that reads the stand's current effective
+Git inputs and its newest `run-manifest.json`, and a freshness criterion computed
+over **every effective input of the manifest**, comparing hashes where the input
+is a file and recorded values where it is not: bank/contract pin; the caller,
+simulator, judge, matcher and annotator prompts; `config.toml`; the methodology
+pin; the scenario and its ground truth; the harness revision; the Claude Code
+version; the runtime revision; and every model selection. The harness and runtime
 revisions are the composite Git-input revisions defined in §8, not repository
 HEAD commits. Any mismatch means "no run exists for the current configuration";
 a date proves nothing. The item's `@trigger:` names changes to those inputs, not

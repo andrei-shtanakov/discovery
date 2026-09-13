@@ -793,7 +793,7 @@ Expected: 3 passed, lint clean.
 
 - [ ] **Step 5: Write `tools/freshness.py`, the command Task A3 names**
 
-> **Superseded 2026-09-13 by `discovery-test` @ `71e56cf`.** The historical
+> **Superseded 2026-09-13 by `discovery-test` @ `4ebdc4b`.** The historical
 > listing below records whole-repository HEAD commits. The implemented checker
 > now records the composite Git-input revisions defined by spec §8, projects
 > legacy commit SHAs onto the same paths, and refuses dirty revision-paths
