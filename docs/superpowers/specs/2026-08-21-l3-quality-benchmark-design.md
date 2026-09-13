@@ -359,12 +359,21 @@ actually has: **file hashes** for everything the stand owns as a file — the fi
 prompts, `config.toml`, the scenario, the ground truth — and **exact recorded
 values** for what is external and has no file to hash: the `claude --version`
 string, each role's model selection (the CLI argument **and** the identifier
-reported in `stream-json`), the methodology pin, the `discovery` revision with
-`src/discovery/contract/PINNED.txt`, and the harness revision. Calling all of it
-"SHAs" would be wrong — a CLI version and a model identifier are values, not
-digests. It also carries token and call counters and the paths to the full
-`stream-json` of every role. Money is not stored: tokens and calls are, and
-a separately pinned price table converts them.
+reported in `stream-json`), the methodology pin, and two composite Git-input
+revisions. `discovery_revision` contains the object ids of `src/discovery`,
+`pyproject.toml`, and `uv.lock`; `harness_revision` contains those of `l3bench`,
+`tools`, `prompts`, `config.toml`, `pyproject.toml`, and `uv.lock`. Thus a
+documentation-only commit cannot invalidate a run, while a dependency or
+console-script change still does. Calling all of it "SHAs" would be wrong — a
+CLI version and a model identifier are values, not digests. It also carries
+token and call counters and the paths to the full `stream-json` of every role.
+Money is not stored: tokens and calls are, and a separately pinned price table
+converts them.
+
+Legacy manifests store a full commit SHA in each revision field. The freshness
+checker does not rewrite evidence: when that commit is still available locally,
+it projects the recorded commit onto the same effective paths before comparing.
+An unavailable commit cannot prove equivalence and remains stale, fail-closed.
 
 Run states: `ok`, `invalid_leak`, `submission_failed`, `blocked_by_upstream_run`,
 `harness_error`. All but `ok` are retained in full.
@@ -378,9 +387,11 @@ effective input of the manifest**, comparing hashes where the input is a file
 and recorded values where it is not: bank/contract pin; the caller, simulator,
 judge, matcher and annotator prompts; `config.toml`; the methodology pin; the
 scenario and its ground truth; the harness revision; the Claude Code version;
-and every model selection. Any mismatch means "no run exists for the current
-configuration"; a date proves nothing. The item's `@trigger:` names changes to
-those inputs, not only to the bank and the caller.
+and every model selection. The harness and runtime revisions are the composite
+Git-input revisions defined in §8, not repository HEAD commits. Any mismatch
+means "no run exists for the current configuration"; a date proves nothing.
+The item's `@trigger:` names changes to those inputs, not only to the bank and
+the caller.
 
 ## 10. Not in v1
 

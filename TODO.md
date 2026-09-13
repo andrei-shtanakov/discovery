@@ -400,11 +400,18 @@
       хешу, внешнее по значению) и печатает список расхождений.
       Несовпадение означает «для текущей конфигурации прогона нет» — дата не
       доказывает ничего. Спека: `docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md` §9.
-- [ ] `freshness.py`: ревизию рантайма считать по дереву `src/discovery`, а не по HEAD репо @owner:github:andrei-shtanakov @id:l3-freshness-runtime-tree @epic:eco.discovery-runtime
-      На 2026-09-13 все три сценария помечены STALE, хотя `src/` не менялся с
-      PR #35 (`72ba2ab`): `discovery_revision` берётся из `git rev-parse HEAD`, и его
-      сдвигают доковые PR (#37–#41), которые на прогон не влияют. Ложная
-      протухлость обесценивает сигнал — перегон трёх сценариев стоит ≈ 3 ч и ≈ $25.
+- [x] `freshness.py`: ревизию рантайма считать по дереву `src/discovery`, а не по HEAD репо @owner:github:andrei-shtanakov @id:l3-freshness-runtime-tree @epic:eco.discovery-runtime
+      **Сделано 2026-09-13 (`discovery-test` @ `4855819`).** `discovery_revision`
+      теперь составлен из Git object id для `src/discovery`, `pyproject.toml` и
+      `uv.lock`; `harness_revision` — для `l3bench/`, `tools/`, `prompts/`,
+      `config.toml`, `pyproject.toml` и `uv.lock`. Старые манифесты с full commit
+      SHA не переписаны: checker проецирует их на те же пути в записанном
+      коммите; недоступный commit fail-closed остаётся расхождением. Регрессия
+      доказывает, что doc-only commit больше не делает legacy-run протухшим.
+      До исправления все три сценария были помечены STALE, хотя `src/` не менялся
+      с PR #35 (`72ba2ab`): `discovery_revision` брался из `git rev-parse HEAD`, и
+      его сдвигали доковые PR (#37–#44), которые на прогон не влияют. Ложная
+      протухлость обесценивала сигнал — перегон трёх сценариев стоит ≈ 3 ч и ≈ $25.
       Эффективный вход рантайма — не только код: `pyproject.toml` (пины
       зависимостей, `requires-python`, console_script) и `uv.lock` меняют
       поведение установки в `.venv` стенда, не трогая `src/`. Поэтому хэшировать
@@ -412,10 +419,9 @@
       и `uv.lock` — например `git rev-parse HEAD:src/discovery HEAD:pyproject.toml
       HEAD:uv.lock`, склеенные в одну ревизию; `harness_revision` — аналогично по
       `l3bench/`, `tools/`, `prompts/`, `config.toml`, `pyproject.toml`, `uv.lock`.
-      Вместе с правкой стенда — поправить §8/§9 спеки L3 (манифест несёт
-      «ревизию репо»): критерий свежести по-прежнему по каждому эффективному
-      входу, меняется только то, что считается ревизией рантайма.
-      Правка живёт в стенде, здесь только учёт: стенд без remote и без плана.
+      Критерий свежести по-прежнему проверяет каждый эффективный вход; поменялось
+      только содержимое двух revision-значений. Правка живёт в стенде, здесь
+      только учёт: стенд без remote и без плана.
 
 ## Ожидания ответов соседей
 
