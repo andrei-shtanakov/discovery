@@ -392,7 +392,7 @@
       engineer-прогон перестанет возвращать 0 когда бы то ни было. Чинить зеркалированием
       GC-05(engineer): резолвить upstream-бриф по `traces_to` от `base_dir` и считать ключ
       `covered`, когда каждый upstream Must-FR упомянут в теле.
-- [ ] Стенд L3 свеж относительно текущей конфигурации @owner:github:andrei-shtanakov @trigger:"изменился любой эффективный вход манифеста: пин банка/контракта, промпты (caller, simulator, judge, matcher, annotator), config.toml, пин методики, сценарий, ground truth, ревизия харнесса, версия Claude Code, model selection" @id:l3-stand-freshness @epic:eco.discovery-runtime
+- [ ] Стенд L3 свеж относительно текущей конфигурации @owner:github:andrei-shtanakov @trigger:"изменился любой эффективный вход манифеста: пин банка/контракта, промпты (caller, simulator, judge, matcher, annotator), config.toml, пин методики, сценарий, ground truth, ревизия рантайма, ревизия харнесса, версия Claude Code, model selection" @id:l3-stand-freshness @epic:eco.discovery-runtime
       Стенд `../discovery-test` — локальный репо без remote и без CI, поэтому
       протухает молча: ни дайджест Robin, ни plan-check его не видят.
       Проверка: `uv run python ../discovery-test/tools/freshness.py` — сверяет
@@ -401,13 +401,15 @@
       Несовпадение означает «для текущей конфигурации прогона нет» — дата не
       доказывает ничего. Спека: `docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md` §9.
 - [x] `freshness.py`: ревизию рантайма считать по дереву `src/discovery`, а не по HEAD репо @owner:github:andrei-shtanakov @id:l3-freshness-runtime-tree @epic:eco.discovery-runtime
-      **Сделано 2026-09-13 (`discovery-test` @ `4855819`).** `discovery_revision`
+      **Сделано 2026-09-13 (`discovery-test` @ `42455ac`).** `discovery_revision`
       теперь составлен из Git object id для `src/discovery`, `pyproject.toml` и
       `uv.lock`; `harness_revision` — для `l3bench/`, `tools/`, `prompts/`,
       `config.toml`, `pyproject.toml` и `uv.lock`. Старые манифесты с full commit
       SHA не переписаны: checker проецирует их на те же пути в записанном
       коммите; недоступный commit fail-closed остаётся расхождением. Регрессия
       доказывает, что doc-only commit больше не делает legacy-run протухшим.
+      Незакоммиченные изменения любого revision-пути дают STALE, а запуск
+      benchmark останавливается до первого LLM-вызова.
       До исправления все три сценария были помечены STALE, хотя `src/` не менялся
       с PR #35 (`72ba2ab`): `discovery_revision` брался из `git rev-parse HEAD`, и
       его сдвигали доковые PR (#37–#44), которые на прогон не влияют. Ложная

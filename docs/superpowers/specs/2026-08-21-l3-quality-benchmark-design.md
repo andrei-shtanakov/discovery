@@ -363,12 +363,14 @@ reported in `stream-json`), the methodology pin, and two composite Git-input
 revisions. `discovery_revision` contains the object ids of `src/discovery`,
 `pyproject.toml`, and `uv.lock`; `harness_revision` contains those of `l3bench`,
 `tools`, `prompts`, `config.toml`, `pyproject.toml`, and `uv.lock`. Thus a
-documentation-only commit cannot invalidate a run, while a dependency or
-console-script change still does. Calling all of it "SHAs" would be wrong — a
-CLI version and a model identifier are values, not digests. It also carries
-token and call counters and the paths to the full `stream-json` of every role.
-Money is not stored: tokens and calls are, and a separately pinned price table
-converts them.
+committed documentation-only change cannot invalidate a run, while a committed
+dependency or console-script change still does. Before computing either HEAD
+fingerprint, the checker requires every revision-path to be clean; uncommitted
+changes report STALE, and the benchmark runner stops before its first LLM call.
+Calling all of it "SHAs" would be wrong — a CLI version and a model identifier
+are values, not digests. It also carries token and call counters and the paths
+to the full `stream-json` of every role. Money is not stored: tokens and calls
+are, and a separately pinned price table converts them.
 
 Legacy manifests store a full commit SHA in each revision field. The freshness
 checker does not rewrite evidence: when that commit is still available locally,
@@ -387,11 +389,11 @@ effective input of the manifest**, comparing hashes where the input is a file
 and recorded values where it is not: bank/contract pin; the caller, simulator,
 judge, matcher and annotator prompts; `config.toml`; the methodology pin; the
 scenario and its ground truth; the harness revision; the Claude Code version;
-and every model selection. The harness and runtime revisions are the composite
-Git-input revisions defined in §8, not repository HEAD commits. Any mismatch
-means "no run exists for the current configuration"; a date proves nothing.
-The item's `@trigger:` names changes to those inputs, not only to the bank and
-the caller.
+the runtime revision; and every model selection. The harness and runtime
+revisions are the composite Git-input revisions defined in §8, not repository
+HEAD commits. Any mismatch means "no run exists for the current configuration";
+a date proves nothing. The item's `@trigger:` names changes to those inputs, not
+only to the bank and the caller.
 
 ## 10. Not in v1
 
