@@ -401,7 +401,7 @@
       Несовпадение означает «для текущей конфигурации прогона нет» — дата не
       доказывает ничего. Спека: `docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md` §9.
 - [x] `freshness.py`: ревизию рантайма считать по дереву `src/discovery`, а не по HEAD репо @owner:github:andrei-shtanakov @id:l3-freshness-runtime-tree @epic:eco.discovery-runtime
-      **Сделано 2026-09-13 (`discovery-test` @ `42455ac`).** `discovery_revision`
+      **Сделано 2026-09-13 (`discovery-test` @ `71e56cf`).** `discovery_revision`
       теперь составлен из Git object id для `src/discovery`, `pyproject.toml` и
       `uv.lock`; `harness_revision` — для `l3bench/`, `tools/`, `prompts/`,
       `config.toml`, `pyproject.toml` и `uv.lock`. Старые манифесты с full commit

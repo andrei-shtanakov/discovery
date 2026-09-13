@@ -445,7 +445,7 @@ owner.
 - [ ] **Step 1: Add the item under "Наполнение runtime"**
 
 ```markdown
-- [ ] Стенд L3 свеж относительно текущей конфигурации @owner:github:andrei-shtanakov @trigger:"изменился любой эффективный вход манифеста: пин банка/контракта, промпты (caller, simulator, judge, matcher, annotator), config.toml, пин методики, сценарий, ground truth, ревизия харнесса, версия Claude Code, model selection" @id:l3-stand-freshness
+- [ ] Стенд L3 свеж относительно текущей конфигурации @owner:github:andrei-shtanakov @trigger:"изменился любой эффективный вход манифеста: пин банка/контракта, промпты (caller, simulator, judge, matcher, annotator), config.toml, пин методики, сценарий, ground truth, ревизия рантайма, ревизия харнесса, версия Claude Code, model selection" @id:l3-stand-freshness @epic:eco.discovery-runtime
       Стенд `../discovery-test` — локальный репо без remote и без CI, поэтому
       протухает молча: ни дайджест Robin, ни plan-check его не видят.
       Проверка: `uv run python ../discovery-test/tools/freshness.py` — сверяет
@@ -793,7 +793,7 @@ Expected: 3 passed, lint clean.
 
 - [ ] **Step 5: Write `tools/freshness.py`, the command Task A3 names**
 
-> **Superseded 2026-09-13 by `discovery-test` @ `42455ac`.** The historical
+> **Superseded 2026-09-13 by `discovery-test` @ `71e56cf`.** The historical
 > listing below records whole-repository HEAD commits. The implemented checker
 > now records the composite Git-input revisions defined by spec §8, projects
 > legacy commit SHAs onto the same paths, and refuses dirty revision-paths
