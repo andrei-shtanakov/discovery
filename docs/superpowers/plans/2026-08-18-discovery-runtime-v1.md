@@ -3082,8 +3082,10 @@ expansion applies to this run alone.
 If no stakeholder is available, the arc's status is **`implementation complete, live acceptance
 pending`** — never `accepted`. An interview with the repository owner acting as the product
 stakeholder counts, because the interviewer and stakeholder roles are genuinely separate; a
-solo self-interview does not, and the mini-profile that case needs is a separate open question
-in `TODO.md`.
+solo self-interview does not. Per the owner decision of 2026-09-13, no solo mini-profile is
+introduced: Need runs only with a real stakeholder; otherwise the pipeline bypasses Need and
+consumes an existing brief through `spec-loop --brief`. This supersedes the earlier ADR outcome;
+see `TODO.md` (`@id:solo-mode-decision-need-requires-stakeholder`).
 
 ---
 
