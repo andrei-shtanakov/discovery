@@ -684,8 +684,11 @@ The live evidence, in order:
 is `implementation complete, live acceptance pending` — never `accepted`. An
 interview with the owner in the product-stakeholder role does qualify: the
 interviewer and stakeholder roles are genuinely separate. A solo run does not
-substitute for it; the solo frame needs its own mini-profile, still an open
-question in `TODO.md`.
+substitute for it. The owner decision of 2026-09-13 introduced no solo frame:
+Need runs only with a real stakeholder; otherwise the pipeline bypasses Need
+and consumes an existing brief through `spec-loop --brief`. This supersedes the
+mini-profile outcome in the earlier ADR; see
+`TODO.md` (`@id:solo-mode-decision-need-requires-stakeholder`).
 
 ## 13. Risks
 

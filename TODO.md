@@ -496,6 +496,7 @@
       запускается только при наличии реального стейкхолдера; иначе конвейер
       использует готовый бриф через `spec-loop --brief`. Мини-профиль для одного
       человека и отдельная ветка поведения runtime не нужны, поэтому код
-      `discovery` не меняется. Источник: `prograph-vault`,
-      `authored/notes/2026-09-13-pipeline-interview-to-implementation-plan.md` §4;
-      запросы `prograph-vault#127`, `prograph-vault#128`, `discovery#43`.
+      `discovery` не меняется. Решение отменяет вывод про мини-профиль из ADR
+      «Последствия» §4. Источник:
+      `../prograph-vault/authored/notes/2026-09-13-pipeline-interview-to-implementation-plan.md`
+      §4; запросы `prograph-vault#127`, `prograph-vault#128`, `discovery#43`.
