@@ -32,7 +32,23 @@ from discovery.lifecycle import AWAITING_INPUT, compute_lifecycle, next_question
 from discovery.payload import AnswerPayload, PayloadInvalid, parse_payload
 from discovery.protocol import Envelope
 from discovery.questions import QuestionSource
-from discovery.session import Session, SessionHeader, SessionUnreadable, write_artifact
+from discovery.session import (
+    InvalidSessionId,
+    Session,
+    SessionHeader,
+    SessionUnreadable,
+    write_artifact,
+)
+from discovery.upstream import UPSTREAM_NAME, UpstreamRejected, admit
+
+
+class CallRefused(Exception):
+    """The call's arguments do not cohere — nothing was read or written.
+
+    Distinct from `UpstreamRejected`, which judges the *document*: this one
+    judges the *call*. Both project to the same envelope — a call the
+    runtime will not make is a call that decided nothing.
+    """
 
 
 def sessions_root() -> Path:
@@ -130,18 +146,53 @@ def _emit(envelope: Envelope) -> int:
     return protocol.exit_code(envelope)
 
 
+def _admit_upstream(args: argparse.Namespace) -> dict[str, str]:
+    """`{UPSTREAM_NAME: text}` to seed the session with, or `{}`.
+
+    Called before `Session.create`, so a source the runtime will not accept
+    never leaves a session behind for an interview to be run in.
+    """
+    if args.upstream is None:
+        return {}
+    if args.frame != "engineer":
+        raise CallRefused(
+            f"--upstream applies to the engineer frame only, got {args.frame!r}"
+        )
+    if UPSTREAM_NAME in args.traces_to:
+        raise CallRefused(
+            f"--traces-to {UPSTREAM_NAME} is ambiguous with --upstream: "
+            f"{UPSTREAM_NAME} is the name the admitted copy takes"
+        )
+    return {UPSTREAM_NAME: admit(Path(args.upstream))}
+
+
 def cmd_start(args: argparse.Namespace) -> int:
-    """Create a session, then emit its shared status envelope."""
+    """Create a session, then emit its shared status envelope.
+
+    An admitted upstream copy leads `traces_to`: `gate_check` takes the
+    first resolvable ref as the upstream brief, so the copy has to precede
+    whatever `--traces-to` passed.
+    """
     source = build_source()
+    files = _admit_upstream(args)
+    # `is None`, not falsiness: an explicitly empty `--session-id` is a
+    # caller that got its own write-ahead id wrong, and silently generating
+    # one would hand back a session it never named.
+    session_id = (
+        f"s-{uuid.uuid4().hex[:12]}" if args.session_id is None else args.session_id
+    )
     header = SessionHeader(
-        session_id=f"s-{uuid.uuid4().hex[:12]}",
+        session_id=session_id,
         frame=args.frame,
         target=args.target,
-        traces_to=list(args.traces_to),
+        traces_to=[*files, *args.traces_to],
         source_pin=source.pin,
         created_at=_now(),
     )
-    session = Session.create(sessions_root(), header)
+    try:
+        session = Session.create(sessions_root(), header, files=files)
+    except FileExistsError as exc:
+        raise CallRefused(f"session id already in use: {session_id}") from exc
     journal = _journal(session.header.session_id)
     return _emit(
         _status_envelope(journal, session.header, source, session.header.session_id)
@@ -264,10 +315,26 @@ def cmd_answer(args: argparse.Namespace) -> int:
     return _emit(_status_envelope(journal, header, source, args.session))
 
 
+def _has_upstream(session_id: str) -> bool:
+    """Whether this session admitted an upstream copy under `UPSTREAM_NAME`."""
+    return (_session_dir(session_id) / UPSTREAM_NAME).is_file()
+
+
 def cmd_brief(args: argparse.Namespace) -> int:
-    """Render+gate into `args.out`, the one write outside the session root."""
+    """Render+gate into `args.out`, the one write outside the session root.
+
+    The fixed copy name removes the ordinary collision between the upstream
+    and the brief, but an arbitrary `--out` still permits the
+    self-reference, so that one name is refused.
+    """
     source = build_source()
     session = Session.load(sessions_root(), args.session)
+    if Path(args.out).name == UPSTREAM_NAME and _has_upstream(args.session):
+        raise CallRefused(
+            f"--out may not be named {UPSTREAM_NAME} for a session that admitted "
+            "an upstream: the brief would become its own upstream, and the gate "
+            "would check it against its own body"
+        )
     journal = _journal(args.session)
     events = journal.events()
     result = render_and_gate(session.header, events, _session_dir(args.session))
@@ -299,6 +366,8 @@ def _build_parser() -> argparse.ArgumentParser:
     start.add_argument("--frame", required=True, choices=["customer", "engineer"])
     start.add_argument("--target", required=True)
     start.add_argument("--traces-to", action="append", default=[])
+    start.add_argument("--upstream")
+    start.add_argument("--session-id")
     start.set_defaults(func=cmd_start)
 
     status = subparsers.add_parser("status")
@@ -332,6 +401,9 @@ def main(argv: list[str] | None = None) -> int:
         JournalUnreadable,
         PayloadInvalid,
         GateInvariantError,
+        CallRefused,
+        UpstreamRejected,
+        InvalidSessionId,
         OSError,
         UnicodeDecodeError,
     ) as exc:
