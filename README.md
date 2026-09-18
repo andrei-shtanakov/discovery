@@ -24,6 +24,7 @@ network or process-launch adapter.
 
 ```
 discovery start  --frame {customer,engineer} --target <repo> [--traces-to <path>]...
+                 [--upstream <customer_brief>] [--session-id <id>]
 discovery status --session <id>
 discovery answer --session <id> [--question <id>] --role <role> --file <path> [--supersede]
 discovery brief  --session <id> --out <brief_path>
@@ -31,6 +32,12 @@ discovery brief  --session <id> --out <brief_path>
 
 `--file -` reads the payload from stdin. Omitting `--question` answers whichever
 question the session is currently waiting on.
+
+`--session-id` assigns the session's id instead of letting `start` generate one,
+which is what lets an orchestrating caller write the id down **before** the call
+and never end up with a session it cannot name afterwards. The id is validated
+the same way `--session` is, and an id that is already taken is refused with the
+existing session untouched — it is never reused or overwritten.
 
 An entry id may be declared again in a **later** answer: that is an explicit new
 version and replaces the earlier one whole — no field merging, so a version that
@@ -116,12 +123,39 @@ envelope whose axes are not a shape the protocol defines is `1`, never `0`.
 > esac
 > ```
 
-**The engineer frame** needs a resolvable `--traces-to` pointing at an upstream
-customer brief with `status: approved`, and it needs the feasibility topic
-answered. The runtime marks `coverage.feasibility_review` covered once that
-question has an answer; the vendored linter then checks the claim against the
-upstream brief and fails the gate, naming the requirement, if any upstream
-Must-FR received no verdict.
+**The engineer frame** needs a resolvable reference to an upstream customer
+brief with `status: approved`, and it needs the feasibility topic answered. The
+runtime marks `coverage.feasibility_review` covered once that question has an
+answer; the vendored linter then checks the claim against the upstream brief and
+fails the gate, naming the requirement, if any upstream Must-FR received no
+verdict.
+
+`--upstream <file>` is how that reference is established. A caller may not write
+into `$DISCOVERY_HOME`, and `traces_to` is resolved from the session directory,
+so a path into some other repository is not resolvable from a session at all.
+`start` therefore copies the file into the session under the fixed name
+`upstream.md` and puts that name first in `traces_to`. The name is fixed rather
+than taken from the source: a basename that collided with the brief's own file
+name would make `traces_to` resolve to the brief itself, and the gate would
+check the document against its own body.
+
+The source is validated before the session exists — it must be a `.md`
+`discovery-brief`, `interview.frame: customer`, `status: approved`, and clean
+under the vendored linter — so an interview cannot be half-run against the wrong
+source. Two names are consequently reserved: `--traces-to upstream.md` alongside
+`--upstream` is refused as ambiguous, and `brief --out` may not be named
+`upstream.md` for such a session.
+
+The rendered brief carries the same portable `traces_to`, so a caller that keeps
+its own durable copy of that file **beside** the brief it wrote with `--out` gets
+a reference that resolves from the brief, in its own repository, with no path
+back into the session:
+
+```
+brief-input/00-discovery/
+  brief.md      <- discovery brief --out
+  upstream.md   <- the caller's durable copy of the same upstream file
+```
 
 ## Development
 
