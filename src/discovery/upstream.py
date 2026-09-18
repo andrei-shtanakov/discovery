@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from discovery.contract.gate_check import check, split_frontmatter
+from discovery.contract.gate_check import Finding, check, split_frontmatter
 
 UPSTREAM_NAME = "upstream.md"
 
@@ -39,12 +39,11 @@ def admit(path: Path) -> str:
     reading the file are left to the caller's envelope, which already
     projects them.
     """
+    # A restriction on what a caller may hand in, not something the linter
+    # imposes: the copy's own name is fixed, so the ref the linter sees ends
+    # in `.md` whatever the source was called.
     if path.suffix != ".md":
-        raise UpstreamRejected(
-            f"upstream must be a .md file, got {path.name!r}: a ref the "
-            "contract's linter does not treat as a path is a reference "
-            "nothing checks"
-        )
+        raise UpstreamRejected(f"upstream must be a .md file, got {path.name!r}")
     text = path.read_text(encoding="utf-8")
     meta, _ = split_frontmatter(text)
     if meta is None:
@@ -53,7 +52,12 @@ def admit(path: Path) -> str:
         raise UpstreamRejected(
             f"{path}: schema={meta.get('schema')!r}, expected 'discovery-brief'"
         )
-    frame = (meta.get("interview") or {}).get("frame")
+    interview = meta.get("interview")
+    if not isinstance(interview, dict):
+        raise UpstreamRejected(
+            f"{path}: interview is {type(interview).__name__}, expected a mapping"
+        )
+    frame = interview.get("frame")
     if frame != "customer":
         raise UpstreamRejected(
             f"{path}: interview.frame={frame!r}, expected 'customer'"
@@ -62,10 +66,30 @@ def admit(path: Path) -> str:
         raise UpstreamRejected(
             f"{path}: status={meta.get('status')!r}, expected 'approved'"
         )
-    errors = [f for f in check(text, base_dir=path.parent) if f.level == "error"]
+    errors = [f for f in _lint(text, path) if f.level == "error"]
     if errors:
         raise UpstreamRejected(
             f"{path}: upstream does not pass the vendored linter: "
             + "; ".join(str(f) for f in errors)
         )
     return text
+
+
+def _lint(text: str, path: Path) -> list[Finding]:
+    """`check` fenced against a document that came from outside this runtime.
+
+    The vendored linter was written for briefs this runtime rendered itself,
+    where `interview`, `coverage` and the rest are always the shape it
+    expects; `admit` is the first place it meets a document a caller wrote.
+    A scalar where it reads a mapping raises `AttributeError` *inside* the
+    pinned copy — a traceback instead of the one JSON envelope every command
+    owes its caller. The copy is pinned and cannot be repaired from here, so
+    an unlintable document is refused as one.
+    """
+    try:
+        return check(text, base_dir=path.parent)
+    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
+        raise UpstreamRejected(
+            f"{path}: upstream could not be linted "
+            f"({type(exc).__name__}: {exc}) — malformed for the contract"
+        ) from exc

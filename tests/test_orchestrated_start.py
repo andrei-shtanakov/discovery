@@ -29,6 +29,7 @@ there.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -214,9 +215,9 @@ class TestUpstreamRefusals:
         assert session_ids(tmp_path) == []
 
     def test_upstream_that_is_not_markdown_is_refused(self, capsys, tmp_path):
-        """A non-`.md` ref never enters `gate_check`'s `path_refs`, so GC-16,
-        GC-12 and GC-05 would all silently skip it — an unchecked reference
-        handed on as a working one."""
+        """A restriction on what a caller may hand in. It is not the linter's
+        doing: the copy's name is fixed, so the ref the linter sees ends in
+        `.md` whatever the source was called."""
         source = tmp_path / "source" / "customer-brief.txt"
         source.parent.mkdir(parents=True, exist_ok=True)
         source.write_text(APPROVED_UPSTREAM, encoding="utf-8")
@@ -303,6 +304,55 @@ class TestUpstreamRefusals:
         assert envelope["operation"]["status"] == "unknown"
         assert session_ids(tmp_path) == [], why
 
+    @pytest.mark.parametrize(
+        "mutate,trap",
+        [
+            (
+                lambda t: t.replace(
+                    "interview:\n  frame: customer\n"
+                    "  sessions:\n    - participant_role: customer\n",
+                    "interview: customer\n",
+                ),
+                "interview read as a mapping",
+            ),
+            (
+                lambda t: re.sub(
+                    r"coverage:\n(  [\w]+: [\w]+\n)+", "coverage: everything\n", t
+                ),
+                "coverage read as a mapping",
+            ),
+        ],
+    )
+    def test_a_malformed_upstream_is_refused_with_an_envelope_not_a_traceback(
+        self, capsys, tmp_path, mutate, trap
+    ):
+        """`admit` is where the pinned linter first meets a document this
+        runtime did not render. A scalar where it reads a mapping raises
+        `AttributeError` inside the vendored copy, which no handler catches:
+        the command would print no envelope at all, breaking the one promise
+        every command makes. `drive` parses stdout as JSON, so a traceback
+        fails this case rather than passing it quietly."""
+        mutated = mutate(APPROVED_UPSTREAM)
+        assert mutated != APPROVED_UPSTREAM, trap
+        upstream = write_upstream(tmp_path, mutated)
+
+        code, envelope = drive(
+            [
+                "start",
+                "--frame",
+                "engineer",
+                "--target",
+                "org/repo",
+                "--upstream",
+                str(upstream),
+            ],
+            capsys,
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert session_ids(tmp_path) == []
+
     def test_traces_to_claiming_the_reserved_name_alongside_upstream_is_refused(
         self, capsys, tmp_path
     ):
@@ -343,6 +393,44 @@ class TestHeaderIsTheCommitMarker:
         code, envelope = drive(["status", "--session", created[0]], capsys)
         assert code == 1
         assert envelope["lifecycle"] == "unknown"
+
+    def test_an_uncommitted_reservation_is_completed_by_a_retry(
+        self, capsys, tmp_path, monkeypatch
+    ):
+        """Otherwise a crash burns the caller's write-ahead id for good: taken
+        for `start`, unreadable for `status`, and unreachable for a caller
+        that may not write into the session root."""
+        from discovery import session as session_module
+
+        real_write = session_module._atomic_write
+
+        def fail_on_header(path: Path, text: str) -> None:
+            if path.name == "header.json":
+                raise OSError("disk full")
+            real_write(path, text)
+
+        monkeypatch.setattr(session_module, "_atomic_write", fail_on_header)
+        upstream = write_upstream(tmp_path)
+        argv = [
+            "start",
+            "--frame",
+            "engineer",
+            "--target",
+            "org/repo",
+            "--upstream",
+            str(upstream),
+            "--session-id",
+            "run-01",
+        ]
+        code, _ = drive(argv, capsys)
+        assert code == 1
+
+        monkeypatch.setattr(session_module, "_atomic_write", real_write)
+        code, envelope = drive(argv, capsys)
+
+        assert code == 20
+        assert envelope["next_action"]["session_id"] == "run-01"
+        assert header_of(tmp_path, "run-01")["traces_to"] == ["upstream.md"]
 
 
 class TestCallerAssignedSessionId:
@@ -434,6 +522,20 @@ class TestBriefOutCannotShadowTheUpstreamCopy:
         _, envelope = start_engineer(capsys, tmp_path)
         session_id = envelope["next_action"]["session_id"]
         out = tmp_path / "out" / "upstream.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        code, _ = drive(["brief", "--session", session_id, "--out", str(out)], capsys)
+
+        assert code == 1
+        assert not out.exists()
+
+    def test_an_out_name_differing_only_in_case_is_refused_too(self, capsys, tmp_path):
+        """On a case-insensitive filesystem `UPSTREAM.MD` *is* the copy's
+        name as far as `_resolve_ref` is concerned, so an exact comparison
+        would leave the self-reference one keystroke away."""
+        _, envelope = start_engineer(capsys, tmp_path)
+        session_id = envelope["next_action"]["session_id"]
+        out = tmp_path / "out" / "UPSTREAM.MD"
         out.parent.mkdir(parents=True, exist_ok=True)
 
         code, _ = drive(["brief", "--session", session_id, "--out", str(out)], capsys)

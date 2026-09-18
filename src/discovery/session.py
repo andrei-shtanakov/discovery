@@ -118,7 +118,17 @@ class Session:
         """
         _validate_session_id(header.session_id)
         session_dir = root / header.session_id
-        session_dir.mkdir(parents=True, exist_ok=False)
+        try:
+            session_dir.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            # A directory without `header.json` is a reservation an earlier
+            # `create` never committed, not a session. Completing it is what
+            # keeps a crash from burning a caller-assigned id for good: the
+            # id is unusable for `start` and unreadable for `status`, and a
+            # caller may not reach into the session root to clean up. A
+            # committed session is still never overwritten.
+            if (session_dir / "header.json").exists():
+                raise
         for name, content in (files or {}).items():
             _atomic_write(session_dir / name, content)
         text = json.dumps(asdict(header), ensure_ascii=False, indent=2, sort_keys=True)

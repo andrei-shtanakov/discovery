@@ -36,8 +36,11 @@ question the session is currently waiting on.
 `--session-id` assigns the session's id instead of letting `start` generate one,
 which is what lets an orchestrating caller write the id down **before** the call
 and never end up with a session it cannot name afterwards. The id is validated
-the same way `--session` is, and an id that is already taken is refused with the
-existing session untouched — it is never reused or overwritten.
+the same way `--session` is, and an id that already names a session is refused
+with that session untouched — it is never reused or overwritten. A directory an
+interrupted `start` left behind, which never got as far as writing its header,
+is a reservation rather than a session: a retry with the same id completes it,
+so a crash cannot burn the id the caller wrote down.
 
 An entry id may be declared again in a **later** answer: that is an explicit new
 version and replaces the earlier one whole — no field merging, so a version that

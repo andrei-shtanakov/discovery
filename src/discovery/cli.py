@@ -329,7 +329,10 @@ def cmd_brief(args: argparse.Namespace) -> int:
     """
     source = build_source()
     session = Session.load(sessions_root(), args.session)
-    if Path(args.out).name == UPSTREAM_NAME and _has_upstream(args.session):
+    # Case-folded: on a case-insensitive filesystem `--out UPSTREAM.MD`
+    # produces exactly the self-reference this refuses, because
+    # `_resolve_ref("upstream.md", out_dir)` finds it all the same.
+    if Path(args.out).name.lower() == UPSTREAM_NAME and _has_upstream(args.session):
         raise CallRefused(
             f"--out may not be named {UPSTREAM_NAME} for a session that admitted "
             "an upstream: the brief would become its own upstream, and the gate "
