@@ -511,6 +511,23 @@
       (`depends_on`, `priority`, `backend`, ветку) в живом прогоне не принять,
       там либо откат правки, либо новый прогон.
 
+- [ ] Снять обход `_lint` в `upstream.py`, когда `gate_check` станет тотальным на чужом вводе @owner:github:andrei-shtanakov @trigger:"discovery-toolkit#18 закрыт И пин контракта в src/discovery/contract/PINNED.txt обновлён на коммит с фиксом" @id:watch-discovery-toolkit-18 @epic:eco.discovery-runtime
+      Заведено `discovery-toolkit#18` (2026-09-18) из работы по `discovery#49`:
+      `check()` читает `interview`/`coverage` как мэппинги без проверки типа, и
+      скаляр там роняет процесс `AttributeError` — на брифе, который рантайм не
+      рендерил сам, это не гипотеза. У нас такой бриф приходит штатно:
+      `start --upstream` обязан прогнать **чужой** документ через линтер до
+      создания сессии, а публичный контракт требует печатать envelope на любой
+      вход.
+      Обход (PR #50): вызов `check` огорожен в `discovery.upstream._lint`,
+      нелинтуемый документ отказывается как документ; тип `interview` проверяется
+      отдельно. Вендоренную копию не правим — расхождение с каноном ловит
+      copy-integrity, и третья реализация правил здесь запрещена по
+      `@id:gate-check-strategy`.
+      Пункт не блокирующий: маршрут работает, обход стоит десяти строк. Но без
+      записи он бы протух молча — `PF-BLOCKER-STALE` ловит доставленное ожидание,
+      а не «сосед починил, обход больше не нужен».
+
 ## Инфраструктура репо
 
 - [x] Подключить governance-гейт ADR-ECO-004 (caller `governance / gate`) @owner:github:andrei-shtanakov @trigger:"в репо появился код или CI" @id:governance-gate-caller
