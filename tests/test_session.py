@@ -7,8 +7,10 @@ field all raise `SessionUnreadable` instead of returning `None` or a
 partial object; a second `write_artifact` call leaves only the latest
 content behind with no leftover temp file, even for a large payload; the
 target's `st_dev` is stable across overwrites; a second `Session.create`
-call for the same id overwrites the header; and a `session_id` that could
-escape the session root is rejected by both `create` and `load`.
+call for the same id is refused rather than overwriting a live session's
+header; seeded files land before the header, which is the session's commit
+marker; and a `session_id` that could escape the session root is rejected
+by both `create` and `load`.
 """
 
 import json
@@ -118,16 +120,40 @@ def test_load_header_with_unexpected_field_raises_session_unreadable(tmp_path):
         Session.load(root, "sess-1")
 
 
-def test_create_twice_overwrites_header_with_latest_call(tmp_path):
+def test_create_twice_refuses_rather_than_overwriting_the_header(tmp_path):
+    """`mkdir(exist_ok=False)` is atomic, so a taken id is refused with no
+    check-then-create race — and a caller-assigned id can never land on a
+    live session and rewrite what it says about itself."""
     root = tmp_path / "sessions"
     Session.create(root, _make_header())
 
     second_header = _make_header()
     second_header.target = "updated-target"
-    Session.create(root, second_header)
+    with pytest.raises(FileExistsError):
+        Session.create(root, second_header)
 
     loaded = Session.load(root, "sess-1")
-    assert loaded.header.target == "updated-target"
+    assert loaded.header.target == "discovery-brief"
+
+
+def test_create_writes_seeded_files_before_the_header(tmp_path, monkeypatch):
+    """The header is the commit marker: a crash between the two must leave an
+    unreadable session, never a readable one naming a file that is missing."""
+    from discovery import session as session_module
+
+    order: list[str] = []
+    real_write = session_module._atomic_write
+
+    def record(path, text):
+        order.append(path.name)
+        real_write(path, text)
+
+    monkeypatch.setattr(session_module, "_atomic_write", record)
+    Session.create(
+        tmp_path / "sessions", _make_header(), files={"upstream.md": "# upstream\n"}
+    )
+
+    assert order == ["upstream.md", "header.json"]
 
 
 @pytest.mark.parametrize("bad_session_id", ["..", ".", "../escape", "a/b", ""])
