@@ -428,7 +428,10 @@
       только содержимое двух revision-значений. Правка живёт в стенде, здесь
       только учёт: стенд без remote и без плана.
 
-- [ ] Оркестрированный запуск: приём upstream-брифа (`start --upstream`) и caller-assigned `--session-id` @owner:github:andrei-shtanakov @id:orchestrated-start-upstream-and-session-id @epic:eco.discovery-runtime
+- [x] Оркестрированный запуск: приём upstream-брифа (`start --upstream`) и caller-assigned `--session-id` @owner:github:andrei-shtanakov @id:orchestrated-start-upstream-and-session-id @epic:eco.discovery-runtime
+      **Сделано (PR #50).** Приёмка п.1 — сквозной тест по реальному банку:
+      бриф с переносимым `traces_to` разрешается от самого брифа, когда рядом
+      лежит durable-копия; негативный контроль без копии даёт GC-16.
       Принят из inbox `discovery#49` (запрос devtools, этап E2 плана пайплайна:
       стадия Need вызывается прогоном `spec-loop --need`). Customer-маршрут у
       соседа замкнут на текущем публичном CLI, engineer-маршрут — нет, и оба
