@@ -8,7 +8,7 @@ governance-гейты (BR/FRD — фрейм customer; 0b/0a — фрейм engi
 
 **Состояние на 2026-08-20 — рантайм работает.** Арка runtime-v1 смержена и прошла
 живую приёмку 2026-08-19 (`docs/evidence/`); ось `readiness` и exit 11 добавлены
-PR #12. CLI — четыре команды (`start`/`status`/`answer`/`brief`), console_script
+PR #12. CLI — пять команд (`start`/`status`/`answer`/`brief`/`approve`), console_script
 `discovery`, состояние в `$DISCOVERY_HOME/sessions/`, контракт вызова — в `README.md`,
 дизайн — `docs/superpowers/specs/2026-08-18-discovery-runtime-design.md`. CI гоняет
 pytest/ruff/pyrefly. Решение о старте принято 2026-08-18 (`@id:start-decision`) —
@@ -18,6 +18,13 @@ pytest/ruff/pyrefly. Решение о старте принято 2026-08-18 (`
 канон `DISCOVERY-BRIEF-CONTRACT.md` v1.1, линтер `gate_check.py`), но рантайм её
 **не резолвит наружу**: контракт, линтер и фреймы вендорены пиненой копией в
 `src/discovery/contract/`.
+
+**Approval — акт человека, не команда.** `approve` (issue #55) ничего не решает:
+он read-only сверяет у форджи, что PR с брифом смержен учёткой из allowlist
+(репо `approval-policy`, координаты вендорены в `approval_policy_source.env`),
+что смерженные байты — эти байты, и только тогда зеркалит четыре поля
+контракта плюс `approved_content_hash`. Адаптер форджи (`gh`) — отдельный
+пакет `discovery_forge`, ядро его не импортирует (test_boundary).
 
 **Жёсткая граница:** discovery авторит бриф и на этом останавливается. Он **не пишет**
 `tasks.md`, design и планы исполнения — компиляция вниз делегируется governance-слою

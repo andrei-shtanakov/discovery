@@ -470,6 +470,49 @@
       П.3 запроса (метаданные сессии в envelope) в объём не входит — отклонён
       отдельным решением, см. «Принятые ограничения».
 
+- [ ] Акт approval брифа: подкоманда `discovery approve` — подпись из факта человеческого мержа, allowlist из репо `approval-policy`, байты сверены со смерженными @owner:github:andrei-shtanakov @id:brief-approval-act @epic:eco.discovery-runtime
+      Принят из inbox `discovery#55` (запрос devtools, решение владельца
+      2026-09-20 и решение 8 ноты `2026-09-20-pipeline-and-polygon-decisions`).
+      Сегодня `render_brief` хардкодит `status: draft`, `upstream.admit` требует
+      `approved`, а команды, которая ставит `approved`, нет нигде — на живой
+      приёмке E1 подпись поставила та же рука, которую она должна ограничивать.
+      Акт утверждения — мерж брифового PR учёткой человека; четыре поля
+      (`status`/`approved_by`/`approved_at`/`approver`) — зеркало факта мержа,
+      как это уже объявляет контракт (`approver` = git-handle человека,
+      C2 REQ-402; «git — источник истины»).
+      **Отступление от буквы issue — источник allowlist.** Issue просит читать
+      `AUTHORIZED_APPROVER_ACCOUNTS` из окружения, «как human-merge.sh и §I12».
+      Между запросом (2026-09-20) и принятием devtools перевёл источник
+      политики в репо `andrei-shtanakov/approval-policy` (спека
+      `2026-09-22-approver-policy-trusted-source-design.md`, решения владельца
+      D1–D6, S7: переменная в окружении — именованный отказ). Довод тот же, что
+      у самого issue: список, который подаёт процесс исполнителя, есть
+      подделываемая подпись. Поэтому `approve` читает allowlist из репо
+      политики по вендоренным координатам (`approval_policy_source.env`, пин
+      devtools S8) и отказывает, если переменная выставлена. Репо политики на
+      2026-09-22 ещё не создано (bootstrap — шаг плана devtools): до него
+      `approve` честно отвечает `unknown`, а не `approved`.
+      Адаптер форджи (`gh` как subprocess) живёт в отдельном пакете
+      `discovery_forge`, а не в ядре: граница `author ≠ execute` держится
+      как capability (test_boundary), и ядро по-прежнему не импортирует ни
+      сети, ни запуска процессов; `cli.build_forge` — composition seam, как
+      `build_source`.
+      Готово, когда: бриф, чей PR смержен человеком из allowlist, получает
+      `approved` без ручной правки; правка байтов после мержа снимает подпись
+      (`approved_content_hash` ≠ self-hash — `admit` отвергает, повторный
+      `approve` возвращает `draft`); `approved` без подтверждённого факта
+      мержа отвергается.
+      **Состояние 2026-09-22:** реализовано в PR #57; три находки ревью-контура
+      (маскировка хеша пустым `approver`, чужой не-бриф мимо envelope, гонка
+      записи во время запросов к фордже) закрыты фикс-коммитами. Бюджет
+      ревью-контура на PR исчерпан (2/2, dry-run считается) при последнем
+      опубликованном request-changes на предыдущий head — мерж остаётся
+      человеку либо `--budget-override`.
+      **Миграционный долг:** `admit` принимает `approved` без
+      `approved_content_hash` (подписанные рукой на E1), чтобы не блокировать
+      E2 до bootstrap репо `approval-policy`; закрыть — переодобрить
+      customer-брифы через `approve` и сделать проверку хеша в `admit` тотальной.
+
 ## Ожидания ответов соседей
 
 - [x] Ответ по `spec-runner#301`: генератор `plan --full` выдаёт мета-строку, которую отвергает валидатор `run`; отказ TDD-гейта невидим снаружи прогона @owner:github:andrei-shtanakov @id:watch-spec-runner-301
