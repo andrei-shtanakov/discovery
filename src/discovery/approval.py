@@ -153,11 +153,15 @@ def verify(text: str) -> str | None:
     meta, _ = _split(text)
     if meta.get("status") != STATUS_APPROVED:
         return DEBT_STATUS
+    # A recorded hash that does not match is judged before the signature's
+    # completeness: it is the one fact that survives any edit of the other
+    # envelope fields, and a reader that let a blanked `approver` mask it
+    # would admit exactly the edited brief the hash exists to catch.
+    recorded = meta.get(SELF_HASH_KEY)
+    if recorded and recorded != self_hash(text):
+        return DEBT_SELF_HASH
     if not all(meta.get(key) for key in ("approved_by", "approved_at", "approver")):
         return DEBT_UNSIGNED
-    recorded = meta.get(SELF_HASH_KEY)
     if not recorded:
         return DEBT_MIGRATION
-    if recorded != self_hash(text):
-        return DEBT_SELF_HASH
     return None

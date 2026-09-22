@@ -481,7 +481,14 @@ def _denial(
             protocol.BRIEF_NOT_IN_PR,
             f"{path} is not in merge commit {merge.commit}",
         )
-    ours, theirs = approval.self_hash(local), approval.self_hash(merged)
+    try:
+        theirs = approval.self_hash(merged)
+    except approval.NotABrief as exc:
+        return (
+            protocol.BRIEF_BYTES_DIVERGED,
+            f"{path} at {merge.commit} is not a brief: {exc}",
+        )
+    ours = approval.self_hash(local)
     if ours != theirs:
         return (
             protocol.BRIEF_BYTES_DIVERGED,
@@ -577,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
         InvalidSessionId,
         ForgeUnavailable,
         PolicyRefused,
+        approval.NotABrief,
         OSError,
         UnicodeDecodeError,
     ) as exc:

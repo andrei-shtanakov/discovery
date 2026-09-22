@@ -111,6 +111,17 @@ class TestSignature:
         with pytest.raises(UpstreamRejected, match=approval.SELF_HASH_KEY):
             admit(upstream(edited))
 
+    def test_a_blanked_approver_does_not_mask_a_stale_hash(self, upstream):
+        """Review finding on PR #57: `verify` used to answer `unsigned` before
+        comparing the hash, so an edited brief with `approver: null` slipped
+        past `admit`, which refuses `self_hash` alone."""
+        edited = STAMPED.replace("by half", "by a third").replace(
+            "approver: andrei-shtanakov", "approver: null"
+        )
+
+        with pytest.raises(UpstreamRejected, match=approval.SELF_HASH_KEY):
+            admit(upstream(edited))
+
     def test_a_hand_approved_brief_without_a_hash_is_still_admitted(self, upstream):
         """Migration debt, admitted as before — see TODO.md brief-approval-act."""
         assert admit(upstream(APPROVED_BY_HAND)) == APPROVED_BY_HAND

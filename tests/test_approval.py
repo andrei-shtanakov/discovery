@@ -165,6 +165,14 @@ class TestVerify:
         )
         assert approval.verify(hand_edited) == approval.DEBT_MIGRATION
 
+    def test_a_stale_hash_outranks_a_blanked_signature(self):
+        edited = (
+            approval.stamp(DRAFT, MERGE)
+            .replace("by half", "by a third")
+            .replace(f"approver: {MERGE.login}", "approver: null")
+        )
+        assert approval.verify(edited) == approval.DEBT_SELF_HASH
+
     def test_approved_without_a_signature_is_unsigned(self):
         stamped = approval.stamp(DRAFT, MERGE).replace(
             f"approver: {MERGE.login}", "approver: null"

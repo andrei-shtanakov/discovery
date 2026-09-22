@@ -302,6 +302,18 @@ class TestDenials:
         assert envelope["operation"]["reason"] == protocol.BRIEF_BYTES_DIVERGED
         assert brief.read_text(encoding="utf-8") == DRAFT
 
+    def test_merged_file_that_is_not_a_brief(self, capsys, forge, brief):
+        """Review finding on PR #57: a merged file without frontmatter used
+        to escape as a traceback instead of the envelope."""
+        forge.merged_text = "# not a brief\n"
+
+        code, envelope = _approve(capsys)
+
+        assert code == 2
+        assert envelope["operation"]["reason"] == protocol.BRIEF_BYTES_DIVERGED
+        assert "not a brief" in envelope["operation"]["detail"]
+        assert brief.read_text(encoding="utf-8") == DRAFT
+
     def test_merged_bytes_are_compared_outside_the_envelope(self, capsys, forge, brief):
         """What git holds is the draft; what is on disk may already carry a
         stamp. The comparison is of content, not of the envelope."""
