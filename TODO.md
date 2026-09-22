@@ -470,7 +470,7 @@
       П.3 запроса (метаданные сессии в envelope) в объём не входит — отклонён
       отдельным решением, см. «Принятые ограничения».
 
-- [ ] Акт approval брифа: подкоманда `discovery approve` — подпись из факта человеческого мержа, allowlist из репо `approval-policy`, байты сверены со смерженными @owner:github:andrei-shtanakov @id:brief-approval-act @epic:eco.discovery-runtime
+- [x] Акт approval брифа: подкоманда `discovery approve` — подпись из факта человеческого мержа, allowlist из репо `approval-policy`, байты сверены со смерженными (PR #57) @owner:github:andrei-shtanakov @id:brief-approval-act @epic:eco.discovery-runtime
       Принят из inbox `discovery#55` (запрос devtools, решение владельца
       2026-09-20 и решение 8 ноты `2026-09-20-pipeline-and-polygon-decisions`).
       Сегодня `render_brief` хардкодит `status: draft`, `upstream.admit` требует
@@ -502,16 +502,17 @@
       (`approved_content_hash` ≠ self-hash — `admit` отвергает, повторный
       `approve` возвращает `draft`); `approved` без подтверждённого факта
       мержа отвергается.
-      **Состояние 2026-09-22:** реализовано в PR #57; три находки ревью-контура
-      (маскировка хеша пустым `approver`, чужой не-бриф мимо envelope, гонка
-      записи во время запросов к фордже) закрыты фикс-коммитами. Бюджет
-      ревью-контура на PR исчерпан (2/2, dry-run считается) при последнем
-      опубликованном request-changes на предыдущий head — мерж остаётся
-      человеку либо `--budget-override`.
+      **Сделано 2026-09-22 (PR #57, мерж владельца `20b3f91`).** Три находки
+      ревью-контура (маскировка хеша пустым `approver`, чужой не-бриф мимо
+      envelope, гонка записи во время запросов к фордже) закрыты фикс-коммитами.
       **Миграционный долг:** `admit` принимает `approved` без
       `approved_content_hash` (подписанные рукой на E1), чтобы не блокировать
       E2 до bootstrap репо `approval-policy`; закрыть — переодобрить
       customer-брифы через `approve` и сделать проверку хеша в `admit` тотальной.
+- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @trigger:"репо andrei-shtanakov/approval-policy создано (bootstrap devtools) И живой approve прошёл на одном customer-брифе" @id:admit-hash-total @epic:eco.discovery-runtime
+      Миграционный долг из `@id:brief-approval-act`: пока репо политики нет,
+      `approve` отвечает `unknown`, и требовать хеш от всех апстримов значило бы
+      заблокировать engineer-маршрут E2 без пути выхода.
 
 ## Ожидания ответов соседей
 
