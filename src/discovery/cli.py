@@ -524,6 +524,14 @@ def cmd_approve(args: argparse.Namespace) -> int:
     else:
         text = local
     if text != local:
+        # The forge calls above take seconds; a save into the brief meanwhile
+        # is a version this call never judged. Re-read at the last moment
+        # and decide nothing rather than overwrite it with the old bytes.
+        if brief.read_text(encoding="utf-8") != local:
+            raise CallRefused(
+                f"{brief} changed on disk during the call — nothing written; "
+                "retry to judge the current bytes"
+            )
         write_artifact(brief, text)
     return _emit(_brief_envelope(text, brief, refusal))
 

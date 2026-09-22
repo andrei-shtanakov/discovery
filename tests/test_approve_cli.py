@@ -124,6 +124,8 @@ class FakeForge:
     policy_sha: str | None = POLICY_SHA
     down: bool = False
     calls: list[tuple] = field(default_factory=list)
+    #: Runs during the forge round-trip — a concurrent editor, for the race.
+    meanwhile: object = None
 
     def _up(self) -> None:
         if self.down:
@@ -137,6 +139,8 @@ class FakeForge:
     def pull_request_files(self, repo: str, number: int) -> list[str]:
         self._up()
         self.calls.append(("pull_request_files", repo, number))
+        if callable(self.meanwhile):
+            self.meanwhile()
         return self.files
 
     def file_at(self, repo: str, commit: str, path: str) -> str | None:
@@ -341,6 +345,23 @@ class TestWithdrawal:
         assert "approver" not in meta
         assert approval.SELF_HASH_KEY not in meta
         assert "by a third" in brief.read_text(encoding="utf-8")
+
+
+class TestRace:
+    def test_a_save_during_the_forge_round_trip_is_not_overwritten(
+        self, capsys, forge, brief
+    ):
+        """Review finding on PR #57: the bytes judged are the bytes read
+        before the forge calls; a version saved meanwhile was never judged
+        and must not be replaced by the old one carrying a stamp."""
+        saved_meanwhile = DRAFT.replace("by half", "by a third")
+        forge.meanwhile = lambda: brief.write_text(saved_meanwhile, encoding="utf-8")
+
+        code, envelope = _approve(capsys)
+
+        assert code == 1
+        assert "changed on disk" in envelope["operation"]["reason"]
+        assert brief.read_text(encoding="utf-8") == saved_meanwhile
 
 
 class TestUnknowns:
