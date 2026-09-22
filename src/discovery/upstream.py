@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from discovery import approval
 from discovery.contract.gate_check import Finding, check, split_frontmatter
 
 UPSTREAM_NAME = "upstream.md"
@@ -65,6 +66,17 @@ def admit(path: Path) -> str:
     if meta.get("status") != "approved":
         raise UpstreamRejected(
             f"{path}: status={meta.get('status')!r}, expected 'approved'"
+        )
+    # `approved` is a claim; the self-hash is what ties it to these bytes.
+    # A brief edited after `discovery approve` stamped it carries a hash
+    # that no longer matches, and is not the document a human merged. A
+    # brief with no hash at all is one stamped before the act existed:
+    # migration debt, admitted as before until the policy source exists
+    # to re-approve it (TODO.md `@id:brief-approval-act`).
+    if approval.verify(text) == approval.DEBT_SELF_HASH:
+        raise UpstreamRejected(
+            f"{path}: status is 'approved' but {approval.SELF_HASH_KEY} does "
+            "not match the bytes: the brief was edited after its approval"
         )
     errors = [f for f in _lint(text, path) if f.level == "error"]
     if errors:

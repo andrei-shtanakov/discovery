@@ -17,8 +17,11 @@ stops. It does not write `tasks.md`, design documents, or execution plans, and
 it does not open the pull request that carries the brief — that is *execute*,
 and it belongs to whoever drives the run. The boundary is enforced as a
 capability, not by string search: writes are permitted only under the session
-root and to the single `--out` path, and the core's import graph contains no
-network or process-launch adapter.
+root, to the single `--out` path and to the brief `approve` mirrors onto, and
+the core's import graph contains no network or process-launch adapter. The one
+such adapter — `discovery_forge`, a read-only `gh` client that `approve` uses
+to learn whether a human merged the brief — is a separate package composed in
+at `cli.build_forge`, never imported by a core module.
 
 ## Using it
 
@@ -28,6 +31,7 @@ discovery start  --frame {customer,engineer} --target <repo> [--traces-to <path>
 discovery status --session <id>
 discovery answer --session <id> [--question <id>] --role <role> --file <path> [--supersede]
 discovery brief  --session <id> --out <brief_path>
+discovery approve <brief_path> --repo <owner/name> --pr <number> [--path <repo-relative>]
 ```
 
 `--file -` reads the payload from stdin. Omitting `--question` answers whichever
@@ -50,6 +54,38 @@ The replacement is recorded on the same `answer_recorded` event as
 Declaring one id twice **inside one** payload is a malformed payload (exit 1,
 journal unchanged). Render, readiness and the gate all read one projection:
 latest answer per question, then the latest version of each entry id.
+
+## Approving a brief
+
+The brief is rendered `status: draft`, and nothing in this runtime can decide
+otherwise: **the act of approval is a human merging the pull request that
+carries the brief** (the contract's mirror rule — `status`, `approved_by`,
+`approved_at`, `approver` reflect git, git is the source of truth). `approve`
+only mirrors that fact onto the file, after establishing it read-only at the
+forge:
+
+1. the PR is merged, and merged by an account on the approver allowlist;
+2. the PR changed the brief (`--path`, or the path as given when relative to
+   the repository root);
+3. the merged bytes are these bytes, outside the approval envelope
+   (`approved_content_hash`, the self-hash of everything else).
+
+Only then the four fields are written, plus the hash. A brief that claims
+`approved` while its bytes no longer match what was merged is returned to
+`draft`: editing an approved brief withdraws its signature, and `start
+--upstream` refuses such a brief. Evidence of the merge is never taken from a
+file or a flag — a signature the caller can forge is what this removes.
+
+The allowlist is read from the `approval-policy` repository at the commit that
+last touched `policy/approvers.env`, by coordinates vendored in
+`src/discovery/approval_policy_source.env`. The environment does not supply
+it: a set `AUTHORIZED_APPROVER_ACCOUNTS` is refused by name. Facts that cannot
+be established — forge unreachable, policy unreadable, a merged PR whose
+merger is unknown — are `unknown` (exit 1), and nothing is written; a fact
+that denies the mirror is `refused` (exit 2) with `operation.reason` one of
+`pr_not_merged`, `approver_not_authorized`, `brief_not_in_pr`,
+`brief_bytes_diverged`. The three axes describe the brief on disk: lifecycle
+`complete`, gate from the linter, readiness from its own `coverage.gate_passed`.
 
 The interview survives process boundaries: `start` issues the first question
 and exits, and a later `status` in a **new** process resumes from the session

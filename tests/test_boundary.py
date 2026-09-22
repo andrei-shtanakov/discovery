@@ -4,10 +4,13 @@ Two independent claims, neither checked as a string search:
 
 (a) No network/process-launch import anywhere in `src/discovery/**/*.py`
 (excluding `contract/`, vendored and covered by its own copy-integrity
-test — TASK-002). `forbidden_imports_in` walks the AST and collects the
-root module of every `Import`/`ImportFrom`, plus any `os.system`/
-`os.exec*` call — `os` itself is not forbidden, since `os.path`/
-`os.environ` are legitimate, only its process-launch attributes are.
+test — TASK-002). The forge adapter that `approve` needs lives in the
+sibling package `src/discovery_forge/` and reaches the core only through
+the function-local import in `cli.build_forge` (checked separately
+below). `forbidden_imports_in` walks the AST and collects the root
+module of every `Import`/`ImportFrom`, plus any `os.system`/`os.exec*`
+call — `os` itself is not forbidden, since `os.path`/`os.environ` are
+legitimate, only its process-launch attributes are.
 
 (b) A full CLI run (`start` -> `answer` on every required question ->
 `brief --out`) only ever writes under `sessions_root()` or the one
@@ -159,6 +162,45 @@ def _discovery_imports_in(path: Path) -> set[str]:
                 if alias.name.startswith("discovery.") and alias.name != "discovery":
                     found.add(alias.name)
     return found
+
+
+ADAPTER_ROOT = CORE_ROOT.parent / "discovery_forge"
+
+
+def _module_level_imports_of(path: Path, root: str) -> set[str]:
+    """Modules under `root` imported at the *top level* of `path` — inside a
+    function body does not count; that is the composition seam."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(root):
+            found.add(node.module or "")
+        elif isinstance(node, ast.Import):
+            found |= {a.name for a in node.names if a.name.startswith(root)}
+    return found
+
+
+class TestForgeAdapterStaysOutsideTheCore:
+    """The forge adapter (`discovery_forge`, a `gh` subprocess) is the one
+    process-launch capability the runtime has, and it enters through
+    `cli.build_forge` alone — a function-local import, replaceable in a
+    test, exactly like `build_source`. A module-level import anywhere in the
+    core would put the adapter on the core's import graph and void (a)."""
+
+    def test_no_core_module_imports_the_adapter_at_module_level(self):
+        violations = {
+            path: mods
+            for path in _core_files()
+            if (mods := _module_level_imports_of(path, "discovery_forge"))
+        }
+
+        assert violations == {}
+
+    def test_the_adapter_is_where_the_process_launch_lives(self):
+        adapter_files = list(ADAPTER_ROOT.rglob("*.py"))
+        assert adapter_files, "expected the discovery_forge adapter package"
+
+        assert any(forbidden_imports_in(path) for path in adapter_files)
 
 
 class TestProtocolIsALeaf:

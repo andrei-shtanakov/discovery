@@ -22,6 +22,11 @@ from dataclasses import dataclass, field
 
 NO_TARGET_QUESTION = "no_target_question"
 ANSWER_CONFLICT = "answer_conflict"
+# `approve` refusals — facts established at the forge that deny the mirror.
+PR_NOT_MERGED = "pr_not_merged"
+APPROVER_NOT_AUTHORIZED = "approver_not_authorized"
+BRIEF_NOT_IN_PR = "brief_not_in_pr"
+BRIEF_BYTES_DIVERGED = "brief_bytes_diverged"
 
 INCOMPLETE = "incomplete"
 UNKNOWN = "unknown"
@@ -91,9 +96,17 @@ def refused(
     next_action: dict | None = None,
     findings: list[str] | None = None,
     readiness_findings: list[str] | None = None,
+    detail: str | None = None,
 ) -> Envelope:
     """Refusal envelope: axes carry the actual computed values, never
-    defaulted to "unknown" — a refusal means state was read successfully."""
+    defaulted to "unknown" — a refusal means state was read successfully.
+
+    `reason` is a machine token; `detail`, when given, is the human-readable
+    circumstance (which login, which hashes) and rides in `operation` too.
+    """
+    operation = {"status": "refused", "reason": reason}
+    if detail is not None:
+        operation["detail"] = detail
     return Envelope(
         lifecycle=lifecycle,
         gate=gate,
@@ -103,7 +116,7 @@ def refused(
         readiness_findings=(
             readiness_findings if readiness_findings is not None else []
         ),
-        operation={"status": "refused", "reason": reason},
+        operation=operation,
     )
 
 

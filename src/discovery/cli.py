@@ -3,8 +3,12 @@
 `start`/`status`/`answer`/`brief` are thin compositions over
 `discovery.{journal,lifecycle,gate,protocol}`: this module owns only where
 a session's files live (`sessions_root`/`_session_dir`/`_journal`) and how
-to reach the question source (`build_source`), never lifecycle/gate/
-coverage rules. `_emit` is the single `print()` + `protocol.exit_code()`
+to reach the question source (`build_source`) and the forge
+(`build_forge`), never lifecycle/gate/coverage rules. `approve` is the
+fifth command and the one that acts on a brief file rather than a session:
+it mirrors a human merge onto the brief's approval envelope
+(`discovery.approval`), the fact coming from a `Forge` and the allowlist
+from `discovery.policy`. `_emit` is the single `print()` + `protocol.exit_code()`
 site, so one envelope shape is physically impossible to diverge between
 commands.
 """
@@ -18,7 +22,10 @@ import sys
 import uuid
 from pathlib import Path
 
-from discovery import protocol, render
+from discovery import approval, policy, protocol, render
+from discovery.approval import MergeEvent
+from discovery.contract.gate_check import check, split_frontmatter
+from discovery.forge import Forge, ForgeUnavailable
 from discovery.gate import GateInvariantError, render_and_gate
 from discovery.hashing import answer_id
 from discovery.journal import (
@@ -30,6 +37,7 @@ from discovery.journal import (
 )
 from discovery.lifecycle import AWAITING_INPUT, compute_lifecycle, next_question
 from discovery.payload import AnswerPayload, PayloadInvalid, parse_payload
+from discovery.policy import PolicyRefused
 from discovery.protocol import Envelope
 from discovery.questions import QuestionSource
 from discovery.session import (
@@ -360,8 +368,161 @@ def cmd_brief(args: argparse.Namespace) -> int:
     )
 
 
+def build_forge() -> Forge:
+    """Composition seam: the `gh`-backed forge from the adapter package.
+
+    Imported here and nowhere else in the core, so the process-launch
+    capability enters through one named function a test can replace, the
+    way `build_source` admits the question bank.
+    """
+    from discovery_forge.gh import GhForge
+
+    return GhForge()
+
+
+def _lint_brief(text: str, path: Path) -> tuple[str, list[str]]:
+    """`(gate, findings)` of a brief file the runtime did not just render.
+
+    Fenced like `upstream._lint`: the pinned linter on a foreign document
+    may raise instead of finding, and a brief it cannot read is a failed
+    gate, not a traceback.
+    """
+    try:
+        findings = check(text, base_dir=path.parent)
+    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
+        return "fail", [f"brief could not be linted ({type(exc).__name__}: {exc})"]
+    errors = [str(f) for f in findings if f.level == "error"]
+    return ("fail" if errors else "pass"), [str(f) for f in findings]
+
+
+def _brief_envelope(text: str, path: Path, refusal: tuple[str, str] | None) -> Envelope:
+    """The envelope `approve` emits over the brief as it is on disk.
+
+    `lifecycle` is `complete`: a brief under approval is a finished
+    interview. `gate` is the linter over the file; `readiness` mirrors the
+    file's own `coverage.gate_passed`, since there is no journal here to
+    re-derive it from — the linter's GC-11 already holds that claim to the
+    body.
+    """
+    meta, _ = split_frontmatter(text)
+    gate, findings = _lint_brief(text, path)
+    coverage = meta.get("coverage") if isinstance(meta, dict) else None
+    passed = isinstance(coverage, dict) and coverage.get("gate_passed") is True
+    readiness = "ready" if passed else "incomplete"
+    if refusal is None:
+        return protocol.ok("complete", gate, readiness, findings=findings)
+    reason, detail = refusal
+    return protocol.refused(
+        reason, "complete", gate, readiness, findings=findings, detail=detail
+    )
+
+
+def _merge_event(forge: Forge, repo: str, number: int) -> MergeEvent | tuple[str, str]:
+    """The act to mirror, or the refusal that denies it.
+
+    A merged PR whose event is missing a login, a time or a commit is not a
+    refusal but an inability: an incomplete event can neither sign the
+    brief nor be checked against it (devtools `merge_event`).
+    """
+    pr = forge.pull_request(repo, number)
+    if pr.state != "MERGED":
+        return protocol.PR_NOT_MERGED, f"PR {repo}#{number} is {pr.state}, not MERGED"
+    missing = [
+        name
+        for name, value in (
+            ("mergedBy.login", pr.merged_by),
+            ("mergedAt", pr.merged_at),
+            ("mergeCommit.oid", pr.merge_commit),
+        )
+        if not value
+    ]
+    if missing:
+        raise ForgeUnavailable(
+            f"PR {repo}#{number} is merged but the event is incomplete: "
+            f"no {', '.join(missing)}"
+        )
+    return MergeEvent(str(pr.merged_by), str(pr.merged_at), str(pr.merge_commit))
+
+
+def _brief_path_in_repo(args: argparse.Namespace) -> str:
+    """The brief's path as the forge knows it: `--path`, else the path as
+    given when relative — a caller at the repository root names the file
+    the way git does. An absolute path names nothing in a repository."""
+    if args.path is not None:
+        return args.path
+    given = Path(args.brief)
+    if given.is_absolute():
+        raise CallRefused(
+            "--path is required when the brief is given by an absolute path: "
+            "the repository-relative path cannot be inferred from it"
+        )
+    return given.as_posix()
+
+
+def _denial(
+    forge: Forge, args: argparse.Namespace, merge: MergeEvent, local: str
+) -> tuple[str, str] | None:
+    """Every fact that denies mirroring `merge` onto `local`, first one wins."""
+    allowed = policy.allowlist(forge)
+    if merge.login not in allowed:
+        return (
+            protocol.APPROVER_NOT_AUTHORIZED,
+            f"merged by {merge.login!r}, not in the approver allowlist",
+        )
+    path = _brief_path_in_repo(args)
+    if path not in forge.pull_request_files(args.repo, args.pr):
+        return (
+            protocol.BRIEF_NOT_IN_PR,
+            f"PR {args.repo}#{args.pr} did not change {path}",
+        )
+    merged = forge.file_at(args.repo, merge.commit, path)
+    if merged is None:
+        return (
+            protocol.BRIEF_NOT_IN_PR,
+            f"{path} is not in merge commit {merge.commit}",
+        )
+    ours, theirs = approval.self_hash(local), approval.self_hash(merged)
+    if ours != theirs:
+        return (
+            protocol.BRIEF_BYTES_DIVERGED,
+            f"local {ours} != merged {theirs} at {merge.commit}",
+        )
+    return None
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    """Mirror a human merge onto the brief's approval envelope.
+
+    Read-only towards the forge, and the one write is the brief itself: the
+    envelope is stamped only once the PR is merged, the merger is on the
+    policy allowlist, the PR changed this file and the merged bytes are
+    these bytes outside the envelope. A brief that claims `approved` while
+    its bytes no longer match what was merged is returned to `draft` —
+    the mirror reflects git, and git does not hold these bytes.
+    """
+    brief = Path(args.brief)
+    local = brief.read_text(encoding="utf-8")
+    try:
+        approval.self_hash(local)
+    except approval.NotABrief as exc:
+        raise CallRefused(f"{brief}: {exc}") from exc
+    forge = build_forge()
+    merge = _merge_event(forge, args.repo, args.pr)
+    refusal = merge if isinstance(merge, tuple) else _denial(forge, args, merge, local)
+    if refusal is None:
+        assert isinstance(merge, MergeEvent)
+        text = approval.stamp(local, merge)
+    elif refusal[0] == protocol.BRIEF_BYTES_DIVERGED:
+        text = approval.withdraw(local)
+    else:
+        text = local
+    if text != local:
+        write_artifact(brief, text)
+    return _emit(_brief_envelope(text, brief, refusal))
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    """The four-command `argparse` surface (DESIGN-018)."""
+    """The five-command `argparse` surface (DESIGN-018 + `approve`)."""
     parser = argparse.ArgumentParser(prog="discovery")
     subparsers = parser.add_subparsers(required=True)
 
@@ -390,6 +551,13 @@ def _build_parser() -> argparse.ArgumentParser:
     brief.add_argument("--out", required=True)
     brief.set_defaults(func=cmd_brief)
 
+    approve = subparsers.add_parser("approve")
+    approve.add_argument("brief")
+    approve.add_argument("--repo", required=True)
+    approve.add_argument("--pr", required=True, type=int)
+    approve.add_argument("--path")
+    approve.set_defaults(func=cmd_approve)
+
     return parser
 
 
@@ -407,6 +575,8 @@ def main(argv: list[str] | None = None) -> int:
         CallRefused,
         UpstreamRejected,
         InvalidSessionId,
+        ForgeUnavailable,
+        PolicyRefused,
         OSError,
         UnicodeDecodeError,
     ) as exc:
