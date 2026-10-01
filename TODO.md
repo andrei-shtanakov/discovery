@@ -509,10 +509,25 @@
       `approved_content_hash` (подписанные рукой на E1), чтобы не блокировать
       E2 до bootstrap репо `approval-policy`; закрыть — переодобрить
       customer-брифы через `approve` и сделать проверку хеша в `admit` тотальной.
-- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @trigger:"репо andrei-shtanakov/approval-policy создано (bootstrap devtools) И живой approve прошёл на одном customer-брифе" @id:admit-hash-total @epic:eco.discovery-runtime
+- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @blocked_by:todo://dispatcher/reapprove-e1-briefs @id:admit-hash-total @epic:eco.discovery-runtime
       Миграционный долг из `@id:brief-approval-act`: пока репо политики нет,
       `approve` отвечает `unknown`, и требовать хеш от всех апстримов значило бы
       заблокировать engineer-маршрут E2 без пути выхода.
+      **Триггер выполнен 2026-10-01** (доставка из inbox `discovery#59`, сверено
+      самостоятельно, а не по тексту issue). Первая половина: репо
+      `approval-policy` есть, `policy/approvers.env` @ `12d198f`, allowlist
+      `andrei-shtanakov`. Вторая половина: живой `approve` на customer-брифе
+      `dispatcher#162` (копия смерженных байтов) ответил `ok` и записал хеш.
+      Пробный `approve` на клоне dispatcher `origin/master` = `4bace22` подписал
+      оба E1-брифа (`spec/discovery-brief-{customer,engineer}.md`, PR #59 и #37)
+      с `gate: pass`.
+      **Порядок важен, поэтому стоит блокер.** Переподписать брифы — это правка
+      файлов dispatcher, у соседа: inbox `dispatcher#293` (slug
+      `reapprove-e1-briefs`). Тотальный хеш в `admit` раньше этого PR отрежет
+      engineer-маршрут от тех же брифов. Брифы под `_cowork_output/`
+      (golden-run, proposals) тоже `approved` без хеша, но это dev-only
+      история: после тотализации их нельзя будет подать в `--upstream`, это
+      принимаем осознанно.
 
 ## Ожидания ответов соседей
 
