@@ -450,3 +450,43 @@ class TestEnvelope:
             forge.calls
         )
         assert ("file_at", POLICY_REPO, POLICY_SHA, POLICY_PATH) in forge.calls
+
+
+class TestTestModeApprover:
+    """mode = "test": the allowlist is accounts.human, not the policy repo."""
+
+    @pytest.fixture(autouse=True)
+    def _test_config(self, tmp_path_factory):
+        import os
+
+        from discovery.darkfactory import df_config
+
+        path = df_config.config_path(dict(os.environ))
+        root = tmp_path_factory.mktemp("ws")
+        path.write_text(
+            'schema = "darkfactory-config/v1"\nmode = "test"\n'
+            '[accounts]\nhuman = "alice"\nagent = "alice"\n'
+            'human_gh_config_dir = "~/.config/gh"\n'
+            'agent_gh_config_dir = "~/.config/gh"\n'
+            f'[workspace]\nroot = "{root}"\n'
+            '[harness]\nauthor = "claude"\nmodel = "claude-opus-5"\n',
+            encoding="utf-8",
+        )
+
+    def test_config_human_merger_is_signed(self, capsys, forge, brief):
+        forge.pr = PullRequest("MERGED", "alice", MERGED.merged_at, MERGE_SHA)
+        forge.policy_text = None
+
+        code, envelope = _approve(capsys)
+
+        assert code == 0, envelope
+        assert _meta(brief)["approver"] == "alice"
+
+    def test_other_merger_is_not_authorized(self, capsys, forge, brief):
+        forge.pr = PullRequest("MERGED", "bob", MERGED.merged_at, MERGE_SHA)
+
+        code, envelope = _approve(capsys)
+
+        assert code == 2
+        assert envelope["operation"]["reason"] == protocol.APPROVER_NOT_AUTHORIZED
+        assert brief.read_text(encoding="utf-8") == DRAFT

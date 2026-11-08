@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from discovery.darkfactory import df_config
 from discovery.forge import Forge
 
 #: The key of the policy file — and the environment name whose presence is
@@ -95,7 +96,10 @@ def allowlist(forge: Forge) -> frozenset[str]:
     """The current allowlist from the trusted source, via `forge`.
 
     Raises `PolicyRefused` when the environment tries to supply it, when
-    the coordinates do not read, or when the source has no policy;
+    the coordinates do not read, when the source has no policy, or when
+    the DarkFactory config is present but unreadable. With a config in
+    `mode = "test"` the allowlist is `{accounts.human}` and the forge is
+    not asked; without a config file the behaviour is the strict one.
     `ForgeUnavailable` from `forge` passes through — an unread source is
     an unknown, not a refusal.
     """
@@ -105,6 +109,13 @@ def allowlist(forge: Forge) -> frozenset[str]:
             "no longer a source of signing policy — the source is the "
             "approval-policy repository; unset it and retry"
         )
+    if os.path.lexists(df_config.config_path(os.environ)):
+        try:
+            cfg = df_config.load(os.environ)
+        except df_config.ConfigError as exc:
+            raise PolicyRefused(f"конфиг DarkFactory: {exc}") from exc
+        if cfg.mode == "test":
+            return frozenset({cfg.accounts.human})
     repo, ref, path = source()
     version = forge.latest_commit_touching(repo, ref, path)
     if version is None:
