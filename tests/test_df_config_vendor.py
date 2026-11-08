@@ -98,11 +98,28 @@ def test_provenance_mismatch_fails():
     assert verdict.status == "failed"
 
 
-def test_drift_ok_failed_and_unknown():
-    commit, _ = _pin()
+def test_drift_compares_the_file_digest_not_the_repo_head():
+    _, manifest = _pin()
+    seen: list[tuple[str, str]] = []
 
-    assert checker.run("drift", fetch=lambda *_: commit.encode()).status == "ok"
-    assert checker.run("drift", fetch=lambda *_: b"b" * 40).status == "failed"
+    def fetch(commit, rel):
+        seen.append((commit, rel))
+        return (DARKFACTORY_DIR / "df_config.py").read_bytes()
+
+    assert manifest["df_config.py"]
+    assert checker.run("drift", fetch=fetch).status == "ok"
+    assert seen == [("HEAD", "governance/df_config.py")]
+
+
+def test_drift_changed_upstream_fails_with_both_digests():
+    verdict = checker.run("drift", fetch=lambda *_: b"changed")
+
+    assert verdict.status == "failed"
+    assert "upstream df_config.py changed: pinned " in verdict.detail
+    assert ", HEAD " in verdict.detail
+
+
+def test_drift_unreachable_is_unknown():
     assert checker.run("drift", fetch=lambda *_: None).status == "unknown"
 
 

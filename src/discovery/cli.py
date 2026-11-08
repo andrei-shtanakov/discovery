@@ -463,7 +463,9 @@ def _denial(
     forge: Forge, args: argparse.Namespace, merge: MergeEvent, local: str
 ) -> tuple[str, str] | None:
     """Every fact that denies mirroring `merge` onto `local`, first one wins."""
-    allowed = policy.allowlist(forge)
+    allowed, banner = policy.resolve(forge)
+    if banner is not None:
+        print(banner, file=sys.stderr)
     if merge.login not in allowed:
         return (
             protocol.APPROVER_NOT_AUTHORIZED,

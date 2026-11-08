@@ -9,6 +9,12 @@ line do not supply or override it (D5): a list the executing process hands
 itself is exactly the forgeable signature the mirror rule removes, so a set
 `AUTHORIZED_APPROVER_ACCOUNTS` is a named refusal (S7), not a fallback.
 
+Strict mode (and no DarkFactory config at all) reads the list from that
+repository. Test mode (`mode = "test"` in the user's DarkFactory config,
+`~/.config/darkfactory/config.toml`; the loader accepts it only from that
+canonical path) uses the single approver `accounts.human` and no policy
+repository. A broken config is refused.
+
 The source's coordinates are a vendored, pinned copy of devtools' SSOT
 (`approval_policy_source.env`, S8) — the cross-repo contract comes in as
 bytes, never as a path outside this repository.
@@ -92,12 +98,40 @@ def parse_allowlist(text: str, what: str) -> frozenset[str]:
     return logins
 
 
-def allowlist(forge: Forge) -> frozenset[str]:
-    """The current allowlist from the trusted source, via `forge`.
+def _strict_cross_check(cfg: df_config.DfConfig) -> None:
+    """Refuse a config `[policy]` that disagrees with the vendored source.
 
-    Raises `PolicyRefused` when the environment tries to supply it, when
-    the coordinates do not read, when the source has no policy, or when
-    the DarkFactory config is present but unreadable. With a config in
+    Parity with devtools `policy_rule.policy_source`: in strict the SSOT
+    coordinates win, and a config that names others is a refusal.
+    """
+    if cfg.policy is None:
+        return
+    mine = (cfg.policy.repo, cfg.policy.ref, cfg.policy.path)
+    vendored = source()
+    if mine != vendored:
+        raise PolicyRefused(
+            "конфиг DarkFactory: [policy] расходится с approval_policy_source.env: "
+            f"конфиг {mine}, вендоренный {vendored}"
+        )
+
+
+def _load_config() -> df_config.DfConfig | None:
+    """The DarkFactory config, `None` without a file; a broken one is refused."""
+    if not os.path.lexists(df_config.config_path(os.environ)):
+        return None
+    try:
+        return df_config.load(os.environ)
+    except df_config.ConfigError as exc:
+        raise PolicyRefused(f"конфиг DarkFactory: {exc}") from exc
+
+
+def resolve(forge: Forge) -> tuple[frozenset[str], str | None]:
+    """The allowlist plus the test-mode banner (`None` in strict).
+
+    Raises `PolicyRefused` when the environment tries to supply the list,
+    when the coordinates do not read, when the source has no policy, when
+    the DarkFactory config is present but unreadable, or (strict) when its
+    `[policy]` differs from the vendored coordinates. With a config in
     `mode = "test"` the allowlist is `{accounts.human}` and the forge is
     not asked; without a config file the behaviour is the strict one.
     `ForgeUnavailable` from `forge` passes through — an unread source is
@@ -109,13 +143,11 @@ def allowlist(forge: Forge) -> frozenset[str]:
             "no longer a source of signing policy — the source is the "
             "approval-policy repository; unset it and retry"
         )
-    if os.path.lexists(df_config.config_path(os.environ)):
-        try:
-            cfg = df_config.load(os.environ)
-        except df_config.ConfigError as exc:
-            raise PolicyRefused(f"конфиг DarkFactory: {exc}") from exc
-        if cfg.mode == "test":
-            return frozenset({cfg.accounts.human})
+    cfg = _load_config()
+    if cfg is not None and cfg.mode == "test":
+        return frozenset({cfg.accounts.human}), df_config.test_banner(cfg)
+    if cfg is not None:
+        _strict_cross_check(cfg)
     repo, ref, path = source()
     version = forge.latest_commit_touching(repo, ref, path)
     if version is None:
@@ -123,4 +155,9 @@ def allowlist(forge: Forge) -> frozenset[str]:
     text = forge.file_at(repo, version, path)
     if text is None:
         raise PolicyRefused(f"policy source {repo}@{version} has no {path}")
-    return parse_allowlist(text, f"{repo}@{version}:{path}")
+    return parse_allowlist(text, f"{repo}@{version}:{path}"), None
+
+
+def allowlist(forge: Forge) -> frozenset[str]:
+    """The current allowlist (see `resolve` for sources and refusals)."""
+    return resolve(forge)[0]

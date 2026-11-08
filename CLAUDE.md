@@ -21,7 +21,10 @@ pytest/ruff/pyrefly. Решение о старте принято 2026-08-18 (`
 
 **Approval — акт человека, не команда.** `approve` (issue #55) ничего не решает:
 он read-only сверяет у форджи, что PR с брифом смержен учёткой из allowlist
-(репо `approval-policy`, координаты вендорены в `approval_policy_source.env`),
+(strict/без конфига — репо `approval-policy`, координаты вендорены в
+`approval_policy_source.env`, `[policy]` конфига обязан совпасть; режим `test`
+конфига DarkFactory — единственный approver `accounts.human`, баннер в stderr;
+env список не задаёт, битый конфиг — отказ),
 что смерженные байты — эти байты, и только тогда зеркалит четыре поля
 контракта плюс `approved_content_hash`. Адаптер форджи (`gh`) — отдельный
 пакет `discovery_forge`, ядро его не импортирует (test_boundary).

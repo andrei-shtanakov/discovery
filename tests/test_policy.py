@@ -1,8 +1,11 @@
 """`discovery.policy` — the approver allowlist from its trusted source.
 
-The list is read from the `approval-policy` repository at the last commit
-touching the policy file, through the forge; the executing process's
-environment never supplies it. Each case isolates one claim: the vendored
+Strict mode (and no DarkFactory config) reads the list from the
+`approval-policy` repository at the last commit touching the policy file,
+through the forge; the environment never supplies it. In test mode
+(`mode = "test"` in the user's DarkFactory config) the list is the single
+`accounts.human` and a broken config is refused. Each case isolates one
+claim: the vendored
 coordinates parse and name the devtools SSOT; the env format is read
 fail-closed (absent, duplicate and empty are refusals, look-alikes are not
 definitions); the allowlist is comma-separated with blanks dropped and an
@@ -208,3 +211,39 @@ class TestFromDarkFactoryConfig:
         forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
 
         assert policy.allowlist(forge) == frozenset({"bob"})
+
+    def test_strict_policy_matching_vendored_source_is_accepted(self, monkeypatch):
+        # the autouse strict config carries [policy] == the vendored source
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        _, banner = policy.resolve(forge)
+
+        assert banner is None
+
+    def test_strict_policy_diverging_from_vendored_source_refused(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        path = _config_file(monkeypatch)
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("main", "other-ref"), encoding="utf-8")
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        with pytest.raises(policy.PolicyRefused, match="расходится с"):
+            policy.allowlist(forge)
+        assert forge.asked is False
+
+    def test_test_mode_resolve_returns_banner(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        _write_test_config(monkeypatch, tmp_path)
+
+        allowed, banner = policy.resolve(_Forge("abc", "x"))
+
+        assert allowed == frozenset({"alice"})
+        assert banner is not None and banner.startswith("режим test:")
+
+    @pytest.mark.no_df_config
+    def test_no_config_skips_the_cross_check(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        assert policy.resolve(forge) == (frozenset({"bob"}), None)

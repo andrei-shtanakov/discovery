@@ -76,10 +76,16 @@ Only then the four fields are written, plus the hash. A brief that claims
 --upstream` refuses such a brief. Evidence of the merge is never taken from a
 file or a flag — a signature the caller can forge is what this removes.
 
-The allowlist is read from the `approval-policy` repository at the commit that
-last touched `policy/approvers.env`, by coordinates vendored in
-`src/discovery/approval_policy_source.env`. The environment does not supply
-it: a set `AUTHORIZED_APPROVER_ACCOUNTS` is refused by name. Facts that cannot
+In strict mode (and without a DarkFactory config) the allowlist is read from the
+`approval-policy` repository at the commit that last touched
+`policy/approvers.env`, by coordinates vendored in
+`src/discovery/approval_policy_source.env`; a config `[policy]` that differs
+from them is refused. The environment never supplies it: a set
+`AUTHORIZED_APPROVER_ACCOUNTS` is refused by name. In test mode
+(`mode = "test"` in `~/.config/darkfactory/config.toml`, accepted only from the
+user's canonical path) the single approver is `accounts.human`, no policy
+repository is read, and `approve` prints a `режим test:` banner to stderr. A
+broken config is refused. Facts that cannot
 be established — forge unreachable, policy unreadable, a merged PR whose
 merger is unknown — are `unknown` (exit 1), and nothing is written; a fact
 that denies the mirror is `refused` (exit 2) with `operation.reason` one of

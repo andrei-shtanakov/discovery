@@ -17,14 +17,16 @@ while its bytes no longer match what was merged: the claim is withdrawn
 Facts that cannot be established — the forge unreachable, a merged PR with
 an incomplete event, the policy repository unreadable — are `unknown`
 (exit 1) and write nothing. The allowlist comes from the policy repository
-only: a set `AUTHORIZED_APPROVER_ACCOUNTS` is a named refusal, not a
-source (devtools S7). Evidence of the merge is never taken from a file or
-a flag: a forged signature is exactly what the act removes.
+(strict, or no DarkFactory config) or, in test mode, from the single
+`accounts.human`, announced on stderr; a set `AUTHORIZED_APPROVER_ACCOUNTS`
+is a named refusal, not a source (devtools S7). Evidence of the merge is
+never taken from a file or a flag: a forged signature is exactly what the act removes.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -490,3 +492,46 @@ class TestTestModeApprover:
         assert code == 2
         assert envelope["operation"]["reason"] == protocol.APPROVER_NOT_AUTHORIZED
         assert brief.read_text(encoding="utf-8") == DRAFT
+
+
+class TestTestModeBanner:
+    def _test_config(self, monkeypatch):
+        from discovery.darkfactory import df_config
+
+        path = df_config.config_path(dict(os.environ))
+        path.write_text(
+            f"""schema = "darkfactory-config/v1"
+mode = "test"
+
+[accounts]
+human = "{HUMAN}"
+agent = "{HUMAN}"
+human_gh_config_dir = "~/.config/gh"
+agent_gh_config_dir = "~/.config/gh"
+
+[workspace]
+root = "{path.parent}"
+
+[harness]
+author = "claude"
+model = "claude-opus-5"
+""",
+            encoding="utf-8",
+        )
+
+    def test_test_mode_announces_itself_on_stderr(
+        self, capsys, forge, brief, monkeypatch
+    ):
+        self._test_config(monkeypatch)
+
+        code = cli.main(["approve", BRIEF_PATH, "--repo", REPO, "--pr", str(PR)])
+
+        captured = capsys.readouterr()
+        assert code == 0
+        assert "режим test:" in captured.err
+        assert json.loads(captured.out)["operation"] == {"status": "ok"}
+
+    def test_strict_prints_no_banner(self, capsys, forge, brief):
+        cli.main(["approve", BRIEF_PATH, "--repo", REPO, "--pr", str(PR)])
+
+        assert "режим test:" not in capsys.readouterr().err

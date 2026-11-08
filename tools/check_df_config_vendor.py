@@ -9,6 +9,7 @@ Destination override: set DF_CONFIG_VENDOR_DEST to an absolute path.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 from functools import partial
@@ -38,6 +39,27 @@ def upstream_path(rel: str) -> str:
     return UPSTREAM_PATHS.get(rel, rel)
 
 
+def drift(fetch: check_vendor.Fetcher, dest: Path) -> Verdict:
+    """Did the vendored file itself change upstream since the pin?
+
+    Compares the digest of `governance/df_config.py` at upstream HEAD with
+    the pinned digest — not the repository HEAD, so unrelated devtools
+    commits keep the weekly job green (the pin may lag the repo).
+    """
+    _, manifest = check_vendor.read_pinned(dest)
+    blob = fetch("HEAD", UPSTREAM_PATHS["df_config.py"])
+    if blob is None:
+        return Verdict("unknown", "upstream df_config.py unreachable")
+    head = hashlib.sha256(blob).hexdigest()
+    pinned = manifest["df_config.py"]
+    if head == pinned:
+        return Verdict("ok", f"df_config.py unchanged upstream ({pinned[:8]})")
+    return Verdict(
+        "failed",
+        f"upstream df_config.py changed: pinned {pinned[:8]}, HEAD {head[:8]}",
+    )
+
+
 def run(
     mode: str,
     fetch: check_vendor.Fetcher | None = None,
@@ -46,8 +68,8 @@ def run(
     """Run one mode against the df_config copy; `fetch` is injectable."""
     dest = dest or resolve_dest()
     if mode == "drift":
-        fetch = fetch or partial(check_vendor.github_head_fetch, repo=UPSTREAM_REPO)
-        return check_vendor.drift(fetch, dest=dest)
+        fetch = fetch or partial(check_vendor.github_fetch, repo=UPSTREAM_REPO)
+        return drift(fetch, dest)
     if mode == "provenance" and fetch is None:
         fetch = partial(check_vendor.github_fetch, repo=UPSTREAM_REPO)
     return check_vendor.verify(
