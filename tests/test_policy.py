@@ -247,3 +247,21 @@ class TestFromDarkFactoryConfig:
         forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
 
         assert policy.resolve(forge) == (frozenset({"bob"}), None)
+
+
+class TestTestModeAnchor:
+    """Test mode only from the canonical config: an XDG redirect is refused."""
+
+    def test_redirected_test_config_refused(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forged = tmp_path / "forged"
+        (forged / "darkfactory").mkdir(parents=True)
+        (forged / "darkfactory" / "config.toml").write_text(
+            TEST_CONFIG.format(root=tmp_path), encoding="utf-8"
+        )
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(forged))
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=alice\n")
+
+        with pytest.raises(policy.PolicyRefused, match="^конфиг DarkFactory: "):
+            policy.allowlist(forge)
+        assert forge.asked is False

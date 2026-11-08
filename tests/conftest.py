@@ -4,6 +4,11 @@ The vendored loader (`discovery.darkfactory.df_config`) reads
 `$XDG_CONFIG_HOME/darkfactory/config.toml`. Tests must never see the
 developer's real config, so each test gets a tmp `XDG_CONFIG_HOME` holding a
 valid strict config; the `no_df_config` marker leaves it empty instead.
+
+`mode = "test"` is accepted only from the account's canonical config
+(`<pw_dir>/.config/darkfactory/config.toml`, `df_config.canonical_config_path`).
+TEST-ONLY: `df_config._real_home` is pointed at a tmp home whose `.config`
+links to the tmp XDG dir, so test-mode configs written there are canonical.
 """
 
 from __future__ import annotations
@@ -77,8 +82,13 @@ def _df_config(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """Point XDG_CONFIG_HOME at a tmp dir with a strict config (or empty)."""
+    from discovery.darkfactory import df_config
+
     xdg = tmp_path_factory.mktemp("xdg-config")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    home = tmp_path_factory.mktemp("real-home")
+    (home / ".config").symlink_to(xdg.resolve(), target_is_directory=True)
+    monkeypatch.setattr(df_config, "_real_home", lambda: home)
     if request.node.get_closest_marker("no_df_config"):
         return
     write_strict_config(xdg, tmp_path_factory.mktemp("workspace"))
