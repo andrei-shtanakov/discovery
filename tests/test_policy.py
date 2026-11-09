@@ -1,8 +1,11 @@
 """`discovery.policy` — the approver allowlist from its trusted source.
 
-The list is read from the `approval-policy` repository at the last commit
-touching the policy file, through the forge; the executing process's
-environment never supplies it. Each case isolates one claim: the vendored
+Strict mode (and no DarkFactory config) reads the list from the
+`approval-policy` repository at the last commit touching the policy file,
+through the forge; the environment never supplies it. In test mode
+(`mode = "test"` in the user's DarkFactory config) the list is the single
+`accounts.human` and a broken config is refused. Each case isolates one
+claim: the vendored
 coordinates parse and name the devtools SSOT; the env format is read
 fail-closed (absent, duplicate and empty are refusals, look-alikes are not
 definitions); the allowlist is comma-separated with blanks dropped and an
@@ -12,6 +15,8 @@ refused; and an unreachable forge is not a refusal but an unknown.
 """
 
 from __future__ import annotations
+
+import os
 
 import pytest
 
@@ -121,3 +126,142 @@ class TestFromForge:
 
         with pytest.raises(ForgeUnavailable):
             policy.allowlist(_Forge("abc", "x", down=True))
+
+
+TEST_CONFIG = """\
+schema = "darkfactory-config/v1"
+mode = "test"
+
+[accounts]
+human = "alice"
+agent = "alice"
+human_gh_config_dir = "~/.config/gh"
+agent_gh_config_dir = "~/.config/gh"
+
+[workspace]
+root = "{root}"
+
+[harness]
+author = "claude"
+model = "claude-opus-5"
+"""
+
+
+def _config_file(monkeypatch: pytest.MonkeyPatch):
+    """The config path under the fixture's XDG dir (parent created)."""
+    from discovery.darkfactory import df_config
+
+    path = df_config.config_path(dict(os.environ))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _write_test_config(monkeypatch, tmp_path) -> None:
+    path = _config_file(monkeypatch)
+    path.unlink(missing_ok=True)
+    path.write_text(TEST_CONFIG.format(root=tmp_path), encoding="utf-8")
+
+
+class TestFromDarkFactoryConfig:
+    def test_allowlist_test_mode_is_config_human(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        _write_test_config(monkeypatch, tmp_path)
+        forge = _Forge("abc", "x", down=True)
+
+        assert policy.allowlist(forge) == frozenset({"alice"})
+        assert forge.asked is False
+
+    @pytest.mark.no_df_config
+    def test_allowlist_no_config_reads_forge(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=alice,bob\n")
+
+        assert policy.allowlist(forge) == frozenset({"alice", "bob"})
+        assert forge.asked is True
+
+    @pytest.mark.no_df_config
+    def test_allowlist_dangling_symlink_refused(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        path = _config_file(monkeypatch)
+        path.symlink_to(tmp_path / "missing.toml")
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=alice\n")
+
+        with pytest.raises(policy.PolicyRefused, match="висячая симлинка"):
+            policy.allowlist(forge)
+        assert forge.asked is False
+
+    def test_allowlist_broken_config_refused(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        _config_file(monkeypatch).write_text("not = [toml", encoding="utf-8")
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=alice\n")
+
+        with pytest.raises(policy.PolicyRefused, match="^конфиг DarkFactory: "):
+            policy.allowlist(forge)
+        assert forge.asked is False
+
+    def test_allowlist_env_still_refused_in_test(self, monkeypatch, tmp_path):
+        _write_test_config(monkeypatch, tmp_path)
+        monkeypatch.setenv(policy.ALLOWLIST_KEY, "alice")
+
+        with pytest.raises(policy.PolicyRefused, match="no longer a source"):
+            policy.allowlist(_Forge("abc", "x"))
+
+    def test_strict_config_reads_forge(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        assert policy.allowlist(forge) == frozenset({"bob"})
+
+    def test_strict_policy_matching_vendored_source_is_accepted(self, monkeypatch):
+        # the autouse strict config carries [policy] == the vendored source
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        _, banner = policy.resolve(forge)
+
+        assert banner is None
+
+    def test_strict_policy_diverging_from_vendored_source_refused(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        path = _config_file(monkeypatch)
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("main", "other-ref"), encoding="utf-8")
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        with pytest.raises(policy.PolicyRefused, match="расходится с"):
+            policy.allowlist(forge)
+        assert forge.asked is False
+
+    def test_test_mode_resolve_returns_banner(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        _write_test_config(monkeypatch, tmp_path)
+
+        allowed, banner = policy.resolve(_Forge("abc", "x"))
+
+        assert allowed == frozenset({"alice"})
+        assert banner is not None and banner.startswith("режим test:")
+
+    @pytest.mark.no_df_config
+    def test_no_config_skips_the_cross_check(self, monkeypatch):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        assert policy.resolve(forge) == (frozenset({"bob"}), None)
+
+
+class TestTestModeAnchor:
+    """Test mode only from the canonical config: an XDG redirect is refused."""
+
+    def test_redirected_test_config_refused(self, monkeypatch, tmp_path):
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        forged = tmp_path / "forged"
+        (forged / "darkfactory").mkdir(parents=True)
+        (forged / "darkfactory" / "config.toml").write_text(
+            TEST_CONFIG.format(root=tmp_path), encoding="utf-8"
+        )
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(forged))
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=alice\n")
+
+        with pytest.raises(policy.PolicyRefused, match="^конфиг DarkFactory: "):
+            policy.allowlist(forge)
+        assert forge.asked is False

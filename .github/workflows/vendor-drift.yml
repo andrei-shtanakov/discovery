@@ -12,3 +12,6 @@ jobs:
       - run: uv run tools/check_vendor.py drift
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: uv run tools/check_df_config_vendor.py drift
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

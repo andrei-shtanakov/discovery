@@ -70,10 +70,15 @@ def resolve_dest() -> Path:
 CONTRACT = resolve_dest()
 
 
-def read_pinned() -> tuple[str, dict[str, str]]:
-    """Parse the commit and per-file digests out of PINNED.txt."""
+def read_pinned(dest: Path | None = None) -> tuple[str, dict[str, str]]:
+    """Parse the commit and per-file digests out of PINNED.txt.
+
+    `dest` selects another vendored copy; default is the contract copy.
+    """
     commit, manifest = "", {}
-    for line in (CONTRACT / "PINNED.txt").read_text(encoding="utf-8").splitlines():
+    for line in (
+        ((dest or CONTRACT) / "PINNED.txt").read_text(encoding="utf-8").splitlines()
+    ):
         if line.startswith("commit:"):
             commit = line.split(":", 1)[1].strip()
         elif line and not line.startswith("upstream:"):
@@ -82,16 +87,17 @@ def read_pinned() -> tuple[str, dict[str, str]]:
     return commit, manifest
 
 
-def local_path(rel: str) -> Path:
+def local_path(rel: str, dest: Path | None = None) -> Path:
     """Map a manifest key to its path under the vendored copy."""
+    base = dest or CONTRACT
     if "frames/" in rel:
-        return CONTRACT / "frames" / rel.rsplit("/", 1)[-1]
-    return CONTRACT / rel
+        return base / "frames" / rel.rsplit("/", 1)[-1]
+    return base / rel
 
 
-def github_fetch(commit: str, rel: str) -> bytes | None:
+def github_fetch(commit: str, rel: str, repo: str | None = None) -> bytes | None:
     """Default fetcher: read a blob from the upstream repo via the GitHub API."""
-    url = CONTENTS_API.format(
+    url = CONTENTS_API.replace(REPO, repo or REPO).format(
         rel=urllib.parse.quote(rel), commit=urllib.parse.quote(commit)
     )
     request = urllib.request.Request(url, headers=_auth_headers())
@@ -102,7 +108,7 @@ def github_fetch(commit: str, rel: str) -> bytes | None:
         return None
 
 
-def github_head_fetch(commit: str, rel: str) -> bytes | None:
+def github_head_fetch(commit: str, rel: str, repo: str | None = None) -> bytes | None:
     """Default fetcher for drift(): resolve upstream's default-branch HEAD sha.
 
     Unlike github_fetch, which reads file blobs via the Contents API, this
@@ -110,7 +116,8 @@ def github_head_fetch(commit: str, rel: str) -> bytes | None:
     so reusing github_fetch's endpoint here would 404 on every real run.
     """
     del commit, rel
-    request = urllib.request.Request(HEAD_API, headers=_auth_headers())
+    api = HEAD_API.replace(REPO, repo or REPO)
+    request = urllib.request.Request(api, headers=_auth_headers())
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             return json.load(response)["sha"].encode("utf-8")
@@ -119,7 +126,12 @@ def github_head_fetch(commit: str, rel: str) -> bytes | None:
 
 
 def verify(
-    mode: Literal["consistency", "provenance"], fetch: Fetcher | None = None
+    mode: Literal["consistency", "provenance"],
+    fetch: Fetcher | None = None,
+    *,
+    dest: Path | None = None,
+    surface: frozenset[str] | None = None,
+    upstream_path: Callable[[str], str] | None = None,
 ) -> Verdict:
     """Check consistency (against PINNED.txt) or provenance (against upstream).
 
@@ -128,8 +140,8 @@ def verify(
     quietly take that file out of both guarantees and leave them green — the
     "unknown as green" failure this tool exists to prevent.
     """
-    commit, manifest = read_pinned()
-    missing = EXPECTED_SURFACE - set(manifest)
+    commit, manifest = read_pinned(dest)
+    missing = (EXPECTED_SURFACE if surface is None else surface) - set(manifest)
     if missing:
         return Verdict(
             "failed",
@@ -140,7 +152,7 @@ def verify(
         drifted = [
             rel
             for rel, digest in manifest.items()
-            if hashlib.sha256(local_path(rel).read_bytes()).hexdigest() != digest
+            if hashlib.sha256(local_path(rel, dest).read_bytes()).hexdigest() != digest
         ]
         if drifted:
             return Verdict(
@@ -151,10 +163,10 @@ def verify(
     fetch = fetch or github_fetch
     mismatched: list[str] = []
     for rel in manifest:
-        blob = fetch(commit, rel)
+        blob = fetch(commit, upstream_path(rel) if upstream_path else rel)
         if blob is None:
             return Verdict("unknown", f"upstream unreachable while reading {rel}")
-        if blob != local_path(rel).read_bytes():
+        if blob != local_path(rel, dest).read_bytes():
             mismatched.append(rel)
     if mismatched:
         return Verdict(
@@ -163,7 +175,7 @@ def verify(
     return Verdict("ok", f"bytes identical to upstream@{commit[:8]}")
 
 
-def drift(fetch: Fetcher | None = None) -> Verdict:
+def drift(fetch: Fetcher | None = None, *, dest: Path | None = None) -> Verdict:
     """Has upstream moved past the pin?
 
     Deliberately does NOT gate on when this watch last succeeded. Proving the
@@ -173,7 +185,7 @@ def drift(fetch: Fetcher | None = None) -> Verdict:
     fired; a schedule that stops firing is caught from outside, by the
     fleet's scheduled-run sensor.
     """
-    commit, _ = read_pinned()
+    commit, _ = read_pinned(dest)
     fetch = fetch or github_head_fetch
     head = fetch("HEAD", "HEAD")
     if head is None:

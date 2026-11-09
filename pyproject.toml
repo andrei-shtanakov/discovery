@@ -31,7 +31,11 @@ line-length = 88
 # существующую функцию, а переформатирование это разрушает. Оговорка:
 # `"docs/"` исключает и настоящие `.py`-файлы, если они там когда-нибудь
 # появятся — такой скрипт молча выпадет из-под форматирования и линта.
-extend-exclude = ["src/discovery/contract/gate_check.py", "docs/"]
+extend-exclude = [
+    "src/discovery/contract/gate_check.py",
+    "src/discovery/darkfactory/df_config.py",
+    "docs/",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

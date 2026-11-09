@@ -1,0 +1,4 @@
+upstream: git@github.com:andrei-shtanakov/devtools.git
+commit: bef1a09adb4588a0049dbfd75bf4bff4a29bf0c4
+
+df_config.py 6610afb847a99d26b6ea1650d14a75a2fce2fa5167df011a5cb8658d8c59cc10
