@@ -217,6 +217,26 @@ class TestBodyRendering:
         assert "**Acceptance**: exports complete within 5s" in text
         assert "traces: [G-01]" in text
 
+    def test_preference_renders_as_a_contract_label(self):
+        """Contract v1.2: `**Preference**` carries the stakeholder's words
+        verbatim beside the composer's hypothesis, and the research Q it
+        cites is a plain reference the linter resolves (GC-17)."""
+        payload = (
+            "entries:\n"
+            "  - id: FR-01\n"
+            "    body: Users can export a report\n"
+            "    Priority: Must\n"
+            "    Preference: «чтобы было быстро»\n"
+            "    Acceptance: export no slower than the value from Q-01\n"
+            "    traces: [G-01]\n"
+        )
+        events = [answer("customer.functions.01", "product", payload)]
+
+        text = render_brief(CUSTOMER, events, "pending")
+
+        assert "**Preference**: «чтобы было быстро»" in text
+        assert "**Acceptance**: export no slower than the value from Q-01" in text
+
     def test_entries_group_by_id_prefix_into_named_sections(self):
         events = [
             answer(
