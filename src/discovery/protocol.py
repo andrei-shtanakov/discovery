@@ -50,20 +50,28 @@ class Envelope:
     findings: list[str] = field(default_factory=list)
     readiness_findings: list[str] = field(default_factory=list)
     operation: dict = field(default_factory=lambda: {"status": "ok"})
+    # `show` only: the read-only session view. `None` keeps every other
+    # command's output at exactly the seven contract keys.
+    session: dict | None = None
 
     def to_json(self) -> str:
-        """Serialize exactly the seven contract keys, in §7 order."""
-        return json.dumps(
-            {
-                "lifecycle": self.lifecycle,
-                "gate": self.gate,
-                "readiness": self.readiness,
-                "next_action": self.next_action,
-                "findings": self.findings,
-                "readiness_findings": self.readiness_findings,
-                "operation": self.operation,
-            }
-        )
+        """Serialize the seven contract keys in §7 order, then `session` when set.
+
+        `default=str`: a session view carries answer payloads as parsed YAML,
+        where an unquoted date is a `date`, not a string.
+        """
+        doc = {
+            "lifecycle": self.lifecycle,
+            "gate": self.gate,
+            "readiness": self.readiness,
+            "next_action": self.next_action,
+            "findings": self.findings,
+            "readiness_findings": self.readiness_findings,
+            "operation": self.operation,
+        }
+        if self.session is not None:
+            doc["session"] = self.session
+        return json.dumps(doc, default=str)
 
 
 def ok(
