@@ -8,7 +8,7 @@ governance-гейты (BR/FRD — фрейм customer; 0b/0a — фрейм engi
 
 **Состояние на 2026-08-20 — рантайм работает.** Арка runtime-v1 смержена и прошла
 живую приёмку 2026-08-19 (`docs/evidence/`); ось `readiness` и exit 11 добавлены
-PR #12. CLI — пять команд (`start`/`status`/`answer`/`brief`/`approve`), console_script
+PR #12. CLI — шесть команд (`start`/`status`/`show`/`answer`/`brief`/`approve`), console_script
 `discovery`, состояние в `$DISCOVERY_HOME/sessions/`, контракт вызова — в `README.md`,
 дизайн — `docs/superpowers/specs/2026-08-18-discovery-runtime-design.md`. CI гоняет
 pytest/ruff/pyrefly. Решение о старте принято 2026-08-18 (`@id:start-decision`) —

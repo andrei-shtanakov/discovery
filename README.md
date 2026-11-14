@@ -29,6 +29,7 @@ at `cli.build_forge`, never imported by a core module.
 discovery start  --frame {customer,engineer} --target <repo> [--traces-to <path>]...
                  [--upstream <customer_brief>] [--session-id <id>]
 discovery status --session <id>
+discovery show   --session <id>
 discovery answer --session <id> [--question <id>] --role <role> --file <path> [--supersede]
 discovery brief  --session <id> --out <brief_path>
 discovery approve <brief_path> --repo <owner/name> --pr <number> [--path <repo-relative>]
@@ -45,6 +46,19 @@ with that session untouched — it is never reused or overwritten. A directory a
 interrupted `start` left behind, which never got as far as writing its header,
 is a reservation rather than a session: a retry with the same id completes it,
 so a crash cannot burn the id the caller wrote down.
+
+`show` is the read-only look at a session: the same axes and exit code as
+`status`, plus a `session` key that no other command emits — header fields,
+the frame's `topics` (`coverage_key → prefix`, required and optional),
+`coverage` (`coverage_key → covered | missing`), the effective `entries`
+(`id`, `body`, `fields`), every id ever `declared` (superseded versions
+included, so a caller minting the next id never reuses one), `holders`
+(`entry_id → question_id` of the answer whose version is effective), the
+`asked` questions and the latest `answers` (`question_id`, `answer_id`,
+`participant_role`, parsed `payload`) in the order they landed. It writes
+nothing: where `status` would issue the next bank question, `show` reports
+only a question already pending, so `next_action` may be `{}` while
+`lifecycle` is `awaiting_input` — run `status` to issue it.
 
 An entry id may be declared again in a **later** answer: that is an explicit new
 version and replaces the earlier one whole — no field merging, so a version that

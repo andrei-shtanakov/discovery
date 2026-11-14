@@ -1,11 +1,11 @@
 """CLI over the core — DESIGN-009..DESIGN-018.
 
-`start`/`status`/`answer`/`brief` are thin compositions over
+`start`/`status`/`show`/`answer`/`brief` are thin compositions over
 `discovery.{journal,lifecycle,gate,protocol}`: this module owns only where
 a session's files live (`sessions_root`/`_session_dir`/`_journal`) and how
 to reach the question source (`build_source`) and the forge
 (`build_forge`), never lifecycle/gate/coverage rules. `approve` is the
-fifth command and the one that acts on a brief file rather than a session:
+one command that acts on a brief file rather than a session:
 it mirrors a human merge onto the brief's approval envelope
 (`discovery.approval`), the fact coming from a `Forge` and the allowlist
 from `discovery.policy`. `_emit` is the single `print()` + `protocol.exit_code()`
@@ -35,7 +35,13 @@ from discovery.journal import (
     Journal,
     JournalUnreadable,
 )
-from discovery.lifecycle import AWAITING_INPUT, compute_lifecycle, next_question
+from discovery.lifecycle import (
+    AWAITING_INPUT,
+    answered_ids,
+    compute_lifecycle,
+    issued,
+    next_question,
+)
 from discovery.payload import AnswerPayload, PayloadInvalid, parse_payload
 from discovery.policy import PolicyRefused
 from discovery.protocol import Envelope
@@ -48,6 +54,7 @@ from discovery.session import (
     write_artifact,
 )
 from discovery.upstream import UPSTREAM_NAME, UpstreamRejected, admit
+from discovery.view import session_view
 
 
 class CallRefused(Exception):
@@ -213,6 +220,46 @@ def cmd_status(args: argparse.Namespace) -> int:
     session = Session.load(sessions_root(), args.session)
     journal = _journal(args.session)
     return _emit(_status_envelope(journal, session.header, source, args.session))
+
+
+def _pending_action(events: list[dict], header: SessionHeader) -> dict:
+    """The question already issued and still unanswered, or `{}`.
+
+    Read-only: unlike `_issue_if_needed`, a question the bank would issue
+    next is not issued by looking at the session.
+    """
+    answered = answered_ids(events)
+    for event in issued(events):
+        if event["question_id"] not in answered:
+            return {
+                "session_id": header.session_id,
+                "question_id": event["question_id"],
+                "coverage_key": event["coverage_key"],
+                "question_text": event["question_text"],
+            }
+    return {}
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    """Emit the session's axes plus its read-only `session` view.
+
+    Writes nothing — not even the `question_asked` `status` would append —
+    so a caller can look at a session as often as it likes without moving it.
+    """
+    source = build_source()
+    session = Session.load(sessions_root(), args.session)
+    events = _journal(args.session).events()
+    result = render_and_gate(session.header, events, _session_dir(args.session))
+    envelope = protocol.ok(
+        lifecycle=compute_lifecycle(events, source, session.header.frame),
+        gate=result.status,
+        readiness=result.readiness,
+        next_action=_pending_action(events, session.header),
+        findings=result.findings,
+        readiness_findings=result.readiness_findings,
+    )
+    envelope.session = session_view(session.header, events)
+    return _emit(envelope)
 
 
 def _latest_answer(events: list[dict], question_id: str) -> dict | None:
@@ -539,7 +586,7 @@ def cmd_approve(args: argparse.Namespace) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """The five-command `argparse` surface (DESIGN-018 + `approve`)."""
+    """The six-command `argparse` surface (DESIGN-018 + `show` + `approve`)."""
     parser = argparse.ArgumentParser(prog="discovery")
     subparsers = parser.add_subparsers(required=True)
 
@@ -562,6 +609,10 @@ def _build_parser() -> argparse.ArgumentParser:
     answer.add_argument("--question")
     answer.add_argument("--supersede", action="store_true")
     answer.set_defaults(func=cmd_answer)
+
+    show = subparsers.add_parser("show")
+    show.add_argument("--session", required=True)
+    show.set_defaults(func=cmd_show)
 
     brief = subparsers.add_parser("brief")
     brief.add_argument("--session", required=True)

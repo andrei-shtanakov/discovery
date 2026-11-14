@@ -192,6 +192,12 @@ def _coverage(
     }
 
 
+def coverage(events: list[dict], frame: str) -> dict[str, str]:
+    """`coverage_key -> covered|missing` — the brief's `coverage` block minus
+    `gate_passed`, by the same projection `render_brief` uses."""
+    return _coverage(_entries(events), frame, _answered_coverage_keys(events))
+
+
 def _traces_of(entry: Entry) -> list[str]:
     """The entry's `traces` as ids, refusing any other type.
 
