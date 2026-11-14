@@ -49,6 +49,8 @@ _LABELLED_FIELDS = {
     "acceptance": "Acceptance",
     "target": "Target",
     "category": "Category",
+    # Contract v1.2: the stakeholder's words, verbatim, beside the hypothesis.
+    "preference": "Preference",
 }
 
 

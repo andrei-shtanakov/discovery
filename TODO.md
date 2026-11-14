@@ -4,8 +4,8 @@
 > ведёт интервью со стейкхолдером и авторит `discovery-brief`, но **не пишет**
 > `tasks.md`/design: компиляция вниз делегируется governance-слою.
 > Методология и канон контракта — в соседнем `discovery-toolkit` (skill
-> `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.1 frozen 2026-07-14,
-> линтер `gate_check.py` GC-01…GC-16).
+> `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.2 (v1 frozen 2026-07-14,
+> v1.2 — 2026-11-14), линтер `gate_check.py` GC-01…GC-17).
 > Решение: `../_cowork_output/decisions/2026-07-13-adr-discovery-interview-agent.md`;
 > план и тест-пирамида: `../_cowork_output/plans/2026-07-13-discovery-agent-flow-and-test-strategy.md`;
 > обзор экосистемы: `../COWORK_CONTEXT.md`.
@@ -536,7 +536,7 @@
       любой рефакторинг молча ломал devtools на перепине. `show` — оси `status` плюс
       ключ `session`, не пишет ничего (не выпускает и следующий вопрос). Переход
       devtools на команду и удаление зонда — их сторона.
-- [ ] Интервью: предпочтение стейкхолдера дословно → гипотеза-ограничение аналитика → число как `Q-NN` исследования; банк не задаёт человеку инструкции составителю @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/preference-constraint-translation @id:discovery-translator-role @epic:eco.discovery-runtime
+- [x] Интервью: предпочтение стейкхолдера дословно → гипотеза-ограничение аналитика → число как `Q-NN` исследования; банк не задаёт человеку инструкции составителю (discovery-toolkit#29 + перепин PR #73) @owner:github:andrei-shtanakov @id:discovery-translator-role @epic:eco.discovery-runtime
       Inbox `discovery#71` от devtools (живой прогон DarkFactory, 12–14.11; позиция
       владельца: «числа — это исследование, не вопрос одному человеку»). Канон
       рамок и GC-08 — у соседа, поэтому форма записи и разметка инструкций заказаны
@@ -546,6 +546,14 @@
       так что форма «не хуже значения из Q-NN» гейт уже проходит. Наша часть после
       ответа соседа: перепин копии, банк уважает разметку, рендер/readiness новых
       полей.
+      **Сделано 2026-11-14.** Сосед ответил контрактом v1.2 (`discovery-toolkit#29`,
+      `cb89725`): `**Preference**` на FR/NFR/M, число — открытый `Q-NN` исследования,
+      GC-17 (ссылка на `Q-NN` разрешается в запись брифа), в банке `> ` —
+      инструкция составителю. Наша часть: перепин копии на `cb89725`, метка
+      `Preference` в рендере, пересобранная база аудита банка (engineer 15 → 13
+      вопросов). Парсер банка правки не потребовал — `> `-строки он и так не
+      читал. Readiness не меняется: §4 формула та же. Стенд L3 после перепина
+      несвеж (`@id:l3-stand-freshness`).
 
 ## Ожидания ответов соседей
 

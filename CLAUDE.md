@@ -15,7 +15,7 @@ pytest/ruff/pyrefly. Решение о старте принято 2026-08-18 (`
 не по триггеру из ADR (состояние/мультиюзер/UI), а по вызываемости стадии прогоном.
 
 Методология остаётся у соседа `../discovery-toolkit` (skill `discovery-interview`,
-канон `DISCOVERY-BRIEF-CONTRACT.md` v1.1, линтер `gate_check.py`), но рантайм её
+канон `DISCOVERY-BRIEF-CONTRACT.md` v1.2, линтер `gate_check.py`), но рантайм её
 **не резолвит наружу**: контракт, линтер и фреймы вендорены пиненой копией в
 `src/discovery/contract/`.
 

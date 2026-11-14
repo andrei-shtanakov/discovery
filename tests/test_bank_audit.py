@@ -57,7 +57,7 @@ class TestClassify:
 
 
 class TestAuditFrame:
-    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 15)])
+    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 13)])
     def test_audits_exactly_the_issued_questions(self, frame, issued):
         audit = bank_audit.audit_frame(frame, FRAMES)
         assert len(audit.questions) == issued
@@ -116,7 +116,7 @@ class TestBaseline:
         current = bank_audit.snapshot(FRAMES)
         assert current["pin"], "a snapshot without its pin cannot be attributed"
 
-    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 15)])
+    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 13)])
     def test_digests_cover_exactly_the_issued_questions(self, frame, issued):
         current = bank_audit.snapshot(FRAMES)
         assert len(current["frames"][frame]["digests"]) == issued
@@ -126,8 +126,9 @@ class TestBaseline:
         # customer: personas.01 + nfr.02 are answer_menu (leading); jobs.01 is
         # advisory-only and must not be counted.
         assert current["frames"]["customer"]["leading"] == 2
-        # engineer: interfaces.01 is answer_menu (leading); feasibility_review
-        # .02/.03 are advisory-only and must not be counted.
+        # engineer: interfaces.01 is answer_menu (leading). The advisory-only
+        # feasibility_review.02/.03 left the bank at contract v1.2: they were
+        # composer instructions, now `> ` lines the bank never issues.
         assert current["frames"]["engineer"]["leading"] == 1
 
     def test_rewording_an_unflagged_question_changes_the_snapshot(self, tmp_path):

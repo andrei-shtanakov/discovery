@@ -1,6 +1,6 @@
-"""gate_check — линтер discovery-brief по контракту DISCOVERY-BRIEF-CONTRACT.md (v1.1).
+"""gate_check — линтер discovery-brief по контракту DISCOVERY-BRIEF-CONTRACT.md (v1.2).
 
-Правила GC-01…GC-16 — нормативный реестр в контракте §5. Каждое finding несёт ID
+Правила GC-01…GC-17 — нормативный реестр в контракте §5. Каждое finding несёт ID
 правила; выход 1, если есть хотя бы одна ошибка.
 
 Запуск: uv run gate_check.py <brief.md> [<brief2.md> ...]
@@ -51,6 +51,7 @@ PRIORITY_RE = re.compile(r"\b(Must|Should|Could|Won't)\b", re.IGNORECASE)
 _DEF_RE = re.compile(r"^(?:-\s+\*\*|#{2,6}\s+)([A-Z]+-\d+)")
 _HEADING_RE = re.compile(r"^#{1,6}\s")
 _ID_LIST_RE = re.compile(r"[A-Z]+-\d+")
+_Q_REF_RE = re.compile(r"\bQ-\d+\b")
 
 
 @dataclass
@@ -194,11 +195,20 @@ def _resolve_ref(ref: str, base_dir: Path) -> Path | None:
     return None
 
 
+def _type_msg(expected: str, value: object) -> str:
+    """Текст finding о неверной форме поля frontmatter."""
+    return f"ожидается {expected}, получено {type(value).__name__}"
+
+
 def check(text: str, base_dir: Path | None = None) -> list[Finding]:
-    """Прогнать все правила GC-01…GC-16; вернуть findings (errors + warnings)."""
+    """Прогнать все правила GC-01…GC-17; вернуть findings (errors + warnings)."""
     findings: list[Finding] = []
-    err = lambda rule, ref, msg: findings.append(Finding(rule, "error", ref, msg))
-    warn = lambda rule, ref, msg: findings.append(Finding(rule, "warning", ref, msg))
+
+    def err(rule: str, ref: str, msg: str) -> None:
+        findings.append(Finding(rule, "error", ref, msg))
+
+    def warn(rule: str, ref: str, msg: str) -> None:
+        findings.append(Finding(rule, "warning", ref, msg))
 
     brief = parse_brief(text)
     if brief is None:
@@ -218,15 +228,22 @@ def check(text: str, base_dir: Path | None = None) -> list[Finding]:
         if not meta.get(key):
             err("GC-02", key, f"поле {key} пусто или отсутствует")
 
-    # GC-03 interview
+    # GC-03 interview. Форма frontmatter не гарантирована: бриф мог написать человек
+    # или чужой прогон (issue #18) — не-мэппинг даёт finding, а не исключение
     interview = meta.get("interview") or {}
-    frame_name = interview.get("frame")
-    if frame_name not in FRAMES:
-        err("GC-03", "interview.frame", f"frame={frame_name!r}, ожидается customer|engineer")
+    if not isinstance(interview, dict):
+        err("GC-03", "interview", _type_msg("мэппинг", interview))
         return findings  # без фрейма дальнейшие правила неприменимы
+    frame_name = interview.get("frame")
+    if not isinstance(frame_name, str) or frame_name not in FRAMES:
+        err("GC-03", "interview.frame", f"frame={frame_name!r}, ожидается customer|engineer")
+        return findings
     frame = FRAMES[frame_name]
     sessions = interview.get("sessions") or []
-    if not sessions:
+    if not isinstance(sessions, list):
+        err("GC-03", "interview.sessions", _type_msg("список", sessions))
+        sessions = []
+    elif not sessions:
         err("GC-03", "interview.sessions", "sessions пуст")
     for i, s in enumerate(sessions):
         if not (isinstance(s, dict) and s.get("participant_role")):
@@ -234,13 +251,17 @@ def check(text: str, base_dir: Path | None = None) -> list[Finding]:
 
     # GC-04 coverage: required-ключи + допустимые значения
     coverage = meta.get("coverage") or {}
-    for key in frame["required"]:
-        if key not in coverage:
-            err("GC-04", f"coverage.{key}", "required-ключ фрейма отсутствует")
+    if not isinstance(coverage, dict):
+        err("GC-04", "coverage", _type_msg("мэппинг", coverage))
+        coverage = {}
+    else:
+        for key in frame["required"]:
+            if key not in coverage:
+                err("GC-04", f"coverage.{key}", "required-ключ фрейма отсутствует")
     for key, value in coverage.items():
         if key == "gate_passed":
             continue
-        if value not in COVERAGE_VALUES:
+        if not isinstance(value, str) or value not in COVERAGE_VALUES:
             err("GC-04", f"coverage.{key}", f"значение {value!r} вне {{covered|partial|missing}}")
 
     # GC-05 covered ⇒ секция непуста
@@ -255,7 +276,7 @@ def check(text: str, base_dir: Path | None = None) -> list[Finding]:
     if isinstance(raw_traces, str):
         raw_traces = [raw_traces]
     elif not isinstance(raw_traces, list):
-        err("GC-01", "traces_to", f"ожидается список или строка, получено {type(raw_traces).__name__}")
+        err("GC-01", "traces_to", _type_msg("список или строка", raw_traces))
         raw_traces = []
 
     # GC-16 путь-элементы traces_to разрешаются (от брифа или корня его репо)
@@ -384,6 +405,17 @@ def check(text: str, base_dir: Path | None = None) -> list[Finding]:
         for prefix in ("S", "IF", "AP"):
             for entry in brief.by_prefix(prefix):
                 warn("GC-14", entry.eid, "solution-space запись в customer-брифе")
+
+    # GC-17 число как исследование: ссылка на Q-NN из FR/NFR/M разрешается в Q брифа
+    questions = {e.eid: e for e in brief.by_prefix("Q")}
+    for entry in (*brief.by_prefix("FR"), *brief.by_prefix("NFR"), *brief.by_prefix("M")):
+        for ref in dict.fromkeys(_Q_REF_RE.findall(entry.text)):
+            target = questions.get(ref)
+            if target is None:
+                err("GC-17", entry.eid, f"ссылка на {ref}, но такой записи Q нет")
+            elif target.resolved():
+                warn("GC-17", entry.eid,
+                     f"{ref} закрыт — подставьте найденное значение вместо ссылки")
 
     # GC-15 validation зеркалит фактический результат линтера (считается последним)
     declared_validation = meta.get("validation")
