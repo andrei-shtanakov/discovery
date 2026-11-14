@@ -529,6 +529,24 @@
       история: после тотализации их нельзя будет подать в `--upstream`, это
       принимаем осознанно.
 
+- [x] Публичная команда `discovery show`: read-only вид сессии вместо импорта внутреннего API зондом devtools (PR #72) @owner:github:andrei-shtanakov @id:discovery-session-view @epic:eco.discovery-runtime
+      Inbox `discovery#70` от devtools: `lite/interview_probe.py` исполнялся
+      интерпретатором discovery и импортировал `render._answered_coverage_keys`,
+      `effective_entries`, `entry_holders`, `gate_check.FRAMES` и журнал, так что
+      любой рефакторинг молча ломал devtools на перепине. `show` — оси `status` плюс
+      ключ `session`, не пишет ничего (не выпускает и следующий вопрос). Переход
+      devtools на команду и удаление зонда — их сторона.
+- [ ] Интервью: предпочтение стейкхолдера дословно → гипотеза-ограничение аналитика → число как `Q-NN` исследования; банк не задаёт человеку инструкции составителю @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/preference-constraint-translation @id:discovery-translator-role @epic:eco.discovery-runtime
+      Inbox `discovery#71` от devtools (живой прогон DarkFactory, 12–14.11; позиция
+      владельца: «числа — это исследование, не вопрос одному человеку»). Канон
+      рамок и GC-08 — у соседа, поэтому форма записи и разметка инструкций заказаны
+      в `discovery-toolkit#28`. Проверено на пине `ee93092`: инструкциями-вопросами
+      стали `engineer.feasibility_review.02/03`; «Завершение» не задаётся
+      (`coverage_key: none`). GC-08 сегодня проверяет лишь наличие `Acceptance`,
+      так что форма «не хуже значения из Q-NN» гейт уже проходит. Наша часть после
+      ответа соседа: перепин копии, банк уважает разметку, рендер/readiness новых
+      полей.
+
 ## Ожидания ответов соседей
 
 - [x] Ответ по `spec-runner#301`: генератор `plan --full` выдаёт мета-строку, которую отвергает валидатор `run`; отказ TDD-гейта невидим снаружи прогона @owner:github:andrei-shtanakov @id:watch-spec-runner-301
