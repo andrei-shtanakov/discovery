@@ -73,7 +73,7 @@ coverage:
 
 ## Personas
 
-- **P-01** dispatcher on the night shift
+- **P-01** dispatcher on the night shift `owns: process, data, quality, operations`
 
 ## Jobs
 
@@ -89,7 +89,11 @@ coverage:
 ## Non-functional requirements
 
 - **NFR-01** retry latency
+  **Category**: perf
   **Target**: p95 under 30s
+- **NFR-02** running budget
+  **Category**: cost
+  **Target**: at most 300 $ a month
 
 ## Constraints
 
@@ -103,6 +107,15 @@ coverage:
 ## Out of scope
 
 - **OUT-01** courier-side retries
+
+## Translation table
+
+| Слова заказчика | Категория | Ограничение | Допущение | Подтверждает | Срок |
+|---|---|---|---|---|---|
+| «перезвонить, не уходя из очереди» | делать | FR-01 | — | — | — |
+| «курьерскую сторону не трогаем» | не делать | OUT-01 | — | — | — |
+| «быстро и дёшево» | стоить | NFR-01, NFR-02 | p95 до 30 с | customer | 2026-12-01 |
+| «API курьеров не меняем» | доказывать | CON-01 | — | — | — |
 """
 
 

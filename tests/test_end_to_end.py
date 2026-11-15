@@ -83,20 +83,23 @@ class TestCustomerInterviewEndToEnd:
 
         code, envelope = drive(["status", "--session", session_id], capsys)
         assert envelope["lifecycle"] == "complete"
-        # The finding of 2026-08-19, pinned: every bank question was answered
-        # and the linter has nothing to object to, yet the brief is a stub.
-        # Before the readiness axis this returned exit 0.
-        assert envelope["gate"] == "pass"
+        # Every bank question answered with prose only: the brief is a stub.
+        # Until contract v1.2 the linter had nothing to object to (gate pass,
+        # readiness incomplete, exit 11 — the finding of 2026-08-19). From
+        # v1.3 the customer linter itself demands the translation table,
+        # perf/cost NFRs and named owners, so the stub fails the gate.
+        assert envelope["gate"] == "fail"
         assert envelope["readiness"] == "incomplete"
-        assert code == 11
+        assert code == 10
         assert any("goals" in f for f in envelope["readiness_findings"])
-        assert envelope["findings"] == []
+        rules = {f.split()[0] for f in envelope["findings"]}
+        assert {"GC-18", "GC-20", "GC-21"} <= rules
 
         out_path = tmp_path / "brief.md"
         code, envelope = drive(
             ["brief", "--session", session_id, "--out", str(out_path)], capsys
         )
-        assert code == 11
+        assert code == 10
         assert out_path.exists()
 
         findings = gate_check.check(
@@ -104,3 +107,79 @@ class TestCustomerInterviewEndToEnd:
         )
         assert isinstance(findings, list)
         assert all(f.level in {"error", "warning"} and f.message for f in findings)
+
+
+# One answer carrying a whole v1.3-complete customer brief (contract v1.3:
+# translation table, NFR categories, owner domains).
+_V13_COMPLETE = """\
+text: everything at once
+translations:
+  - words: «экспорт за секунды»
+    category: делать
+    constraint: FR-01
+  - words: «внешнее не трогать»
+    category: не делать
+    constraint: OUT-01
+  - words: «быстро и недорого»
+    category: стоить
+    constraint: [NFR-01, NFR-02]
+    assumption: «быстро» = p95 до 2 с
+    confirmer: product-owner
+    due: 2026-12-01
+  - words: «только на наших серверах»
+    category: доказывать
+    constraint: CON-01
+entries:
+  - id: G-01
+    body: a goal
+  - id: P-01
+    body: the sponsor
+    owns: [process, data, quality, operations]
+  - id: J-01
+    body: a job
+  - id: FR-01
+    body: a function
+    Priority: Must
+    Acceptance: exports complete within 5 s
+    traces: [G-01]
+  - id: NFR-01
+    body: latency
+    Category: perf
+    Target: p95 under 2 s
+  - id: NFR-02
+    body: budget
+    Category: cost
+    Target: at most 300 $ a month
+  - id: CON-01
+    body: a constraint
+  - id: M-01
+    body: a success metric
+    traces: [G-01]
+  - id: OUT-01
+    body: an out-of-scope item
+"""
+
+
+class TestCustomerInterviewReachesReady:
+    """The real v1.3 bank plus one complete answer reaches exit 0."""
+
+    def test_a_v13_complete_answer_passes_the_gate_and_is_ready(self, tmp_path, capsys):
+        code, envelope = drive(
+            ["start", "--frame", "customer", "--target", "org/repo"], capsys
+        )
+        session_id = envelope["next_action"]["session_id"]
+        answer_path = tmp_path / "answer.yaml"
+        answer_path.write_text(_V13_COMPLETE, encoding="utf-8")
+        argv = ["answer", "--session", session_id, "--role", "customer"]
+
+        code, envelope = drive([*argv, "--file", str(answer_path)], capsys)
+        answer_path.write_text("text: nothing to add\n", encoding="utf-8")
+        for _ in range(200):
+            if code != 20:
+                break
+            code, envelope = drive([*argv, "--file", str(answer_path)], capsys)
+
+        assert envelope["findings"] == []
+        assert envelope["gate"] == "pass"
+        assert envelope["readiness"] == "ready"
+        assert code == 0

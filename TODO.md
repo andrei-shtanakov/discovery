@@ -4,8 +4,8 @@
 > ведёт интервью со стейкхолдером и авторит `discovery-brief`, но **не пишет**
 > `tasks.md`/design: компиляция вниз делегируется governance-слою.
 > Методология и канон контракта — в соседнем `discovery-toolkit` (skill
-> `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.2 (v1 frozen 2026-07-14,
-> v1.2 — 2026-11-14), линтер `gate_check.py` GC-01…GC-17).
+> `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.3 (v1 frozen 2026-07-14,
+> v1.2 — 2026-11-14, v1.3 — 2026-11-15), линтер `gate_check.py` GC-01…GC-21).
 > Решение: `../_cowork_output/decisions/2026-07-13-adr-discovery-interview-agent.md`;
 > план и тест-пирамида: `../_cowork_output/plans/2026-07-13-discovery-agent-flow-and-test-strategy.md`;
 > обзор экосистемы: `../COWORK_CONTEXT.md`.
@@ -554,6 +554,17 @@
       вопросов). Парсер банка правки не потребовал — `> `-строки он и так не
       читал. Readiness не меняется: §4 формула та же. Стенд L3 после перепина
       несвеж (`@id:l3-stand-freshness`).
+- [x] Перепин контракта v1.3 (enterprise-фрейм заказчика): банк 9 блоков, translation table, `**Category**` у NFR, владельцы `owns:` (GC-18…GC-21) (PR #75) @owner:github:andrei-shtanakov @id:repin-contract-v1.3 @epic:eco.discovery-runtime
+      Inbox `discovery#74` от `discovery-toolkit#30` (PR #31, `c09b124`). Хеши
+      контракта и фрейма заказчика сверены с issue; engineer-фрейм не менялся.
+      Наша часть: банк принимает несколько тем на один ключ (`functions`, `nfr`,
+      `constraints` — по две), нумерация вопросов сквозная по ключу, проверка
+      `produces` выровнена по апстриму (префикс секции ∈ `produces`); в ответе —
+      поле `translations:` (строки таблицы, рендер `## Translation table`);
+      `owns`/`Category` списком рендерятся через запятую. Банк customer 19 → 59
+      вопросов. Поведение: customer-бриф без таблицы, perf/cost-NFR и
+      владельцев теперь `gate: fail` (exit 10), а не 11. Стенд L3 после
+      перепина несвеж (`@id:l3-stand-freshness`).
 
 ## Ожидания ответов соседей
 

@@ -130,11 +130,14 @@ def audit_frame(frame: str, frames_dir: Path) -> FrameAudit:
         for q in source.questions(frame)
     )
     topics = parse_frame((frames_dir / f"{frame}.md").read_text(encoding="utf-8"))
-    claimed = {
-        topic.coverage_key: list(topic.produces)
-        for topic in topics
-        if topic.coverage_key is not None
-    }
+    # One key may span several topics (contract v1.3): union their produces in
+    # first-seen order instead of letting the last topic overwrite the rest.
+    claimed: dict[str, list[str]] = {}
+    for topic in topics:
+        if topic.coverage_key is None:
+            continue
+        produces = claimed.setdefault(topic.coverage_key, [])
+        produces.extend(p for p in topic.produces if p not in produces)
     unissued = tuple(
         f"{len(topic.questions)} bullet(s) under a coverage_key: none topic"
         for topic in topics

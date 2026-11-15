@@ -515,6 +515,26 @@ class TestMainExceptionHandling:
         assert code == 1
         assert envelope["operation"]["status"] == "unknown"
 
+    def test_translations_in_an_engineer_session_are_exit_1_and_unwritten(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        catalogue = {"engineer": [Question("engineer.s.01", "systems", "What?")]}
+        session_id, _, _ = _start(
+            capsys, monkeypatch, tmp_path, catalogue, frame="engineer"
+        )
+        answer_path = tmp_path / "a.yaml"
+        answer_path.write_text(
+            "text: t\ntranslations:\n  - words: w\n    category: делать\n"
+        )
+        argv = ["answer", "--session", session_id, "--role", "architect"]
+
+        code, envelope = _run(capsys, [*argv, "--file", str(answer_path)])
+
+        assert code == 1
+        assert "customer frame only" in envelope["operation"]["reason"]
+        events = cli._journal(session_id).events()
+        assert not any(e["event"] == "answer_recorded" for e in events)
+
     def test_status_of_a_journal_with_a_corrupt_line_is_exit_1(
         self, capsys, monkeypatch, tmp_path
     ):

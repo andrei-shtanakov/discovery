@@ -42,7 +42,12 @@ from discovery.lifecycle import (
     issued,
     next_question,
 )
-from discovery.payload import AnswerPayload, PayloadInvalid, parse_payload
+from discovery.payload import (
+    AnswerPayload,
+    PayloadInvalid,
+    parse_payload,
+    refuse_foreign_translations,
+)
 from discovery.policy import PolicyRefused
 from discovery.protocol import Envelope
 from discovery.questions import QuestionSource
@@ -337,6 +342,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
         else Path(args.file).read_text(encoding="utf-8")
     )
     payload = parse_payload(raw)
+    refuse_foreign_translations(payload, header.frame)
 
     new_id = answer_id(header.session_id, target, args.role, raw)
     existing = _latest_answer(events, target)

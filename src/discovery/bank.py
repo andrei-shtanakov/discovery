@@ -86,50 +86,58 @@ def parse_frame(text: str) -> list[Topic]:
     return topics
 
 
+# Prefixes legal in `produces` of a frame: that frame's own sections plus the
+# Q/X invariants every topic may raise. Stricter than upstream's
+# `test_frames_markers.ALLOWED_PREFIXES`, which unions both frames: a
+# customer topic producing `S`/`IF`/`AP` would leak solution space into a
+# problem-space brief, and the brief-level GC-14 is only a warning.
+_INVARIANT_PREFIXES = {"Q", "X"}
+
+
+def _allowed_prefixes(frame: str) -> set[str]:
+    """`frame`'s section prefixes plus the Q/X invariants."""
+    frame_def = gate_check.FRAMES[frame]
+    sections = {**frame_def["required"], **frame_def["optional"]}
+    return _INVARIANT_PREFIXES | {p for p in sections.values() if p}
+
+
 def _validate(frame: str, topics: list[Topic]) -> None:
     """Raise `BankInvalid` if `frame`'s required coverage is unreachable
     (DESIGN-008).
 
-    A required key whose upstream value is `None` (e.g. engineer's
-    `feasibility_review`) names a process, not a section — it has no single
-    `produces` prefix to compare against, so the prefix check is skipped for
-    it once the key itself has been claimed by some topic.
+    One key may be claimed by several topics (contract v1.3: blocks 2 and 7
+    both close `functions`). Each topic of a key with a section must list
+    that section's prefix among its `produces`; further prefixes are allowed
+    as long as the frame itself has those sections. A required key whose
+    upstream value is `None` (engineer's `feasibility_review`) names a
+    process, not a section, so it has no prefix to demand.
     """
     if frame not in gate_check.FRAMES:
         raise BankInvalid(f"unknown frame {frame!r}")
     coverage = gate_check.FRAMES[frame]
-    claimed_keys = [t.coverage_key for t in topics if t.coverage_key is not None]
-    duplicates = {k for k in claimed_keys if claimed_keys.count(k) > 1}
-    if duplicates:
-        raise BankInvalid(
-            f"frame {frame!r} has duplicate coverage_key claim(s): {sorted(duplicates)}"
-        )
-    claimed = set(claimed_keys)
+    claimed = {t.coverage_key for t in topics if t.coverage_key is not None}
     missing = set(coverage["required"]) - claimed
     if missing:
         raise BankInvalid(
             f"frame {frame!r} missing required coverage key(s): {sorted(missing)}"
         )
+    sections = {**coverage["required"], **coverage["optional"]}
     for topic in topics:
         if topic.coverage_key is None:
             continue
-        expected_prefix = coverage["required"].get(topic.coverage_key) or coverage[
-            "optional"
-        ].get(topic.coverage_key)
-        if expected_prefix is None:
-            continue
-        if not topic.produces:
+        unknown = sorted(set(topic.produces) - _allowed_prefixes(frame))
+        if unknown:
             raise BankInvalid(
                 f"topic {topic.coverage_key!r} in frame {frame!r} "
-                "declares no produces prefix"
+                f"produces unknown prefix(es) {unknown}"
             )
-        for produced in topic.produces:
-            if not produced.startswith(expected_prefix):
-                raise BankInvalid(
-                    f"topic {topic.coverage_key!r} in frame {frame!r} "
-                    f"produces {produced!r}, expected prefix "
-                    f"{expected_prefix!r}"
-                )
+        section = sections.get(topic.coverage_key)
+        if section is not None and section not in topic.produces:
+            raise BankInvalid(
+                f"topic {topic.coverage_key!r} in frame {frame!r} "
+                f"produces {topic.produces}, missing its section prefix "
+                f"{section!r}"
+            )
 
 
 class BankQuestionSource:
@@ -156,14 +164,19 @@ class BankQuestionSource:
         topics = parse_frame(text)
         _validate(frame, topics)
         result: list[Question] = []
+        # Numbering runs on per key, not per topic: a key claimed by two
+        # topics would otherwise mint `functions.01` twice.
+        issued: dict[str, int] = {}
         for topic in topics:
-            if topic.coverage_key is None:
+            key = topic.coverage_key
+            if key is None:
                 continue
-            for n, question_text in enumerate(topic.questions, start=1):
+            for question_text in topic.questions:
+                issued[key] = issued.get(key, 0) + 1
                 result.append(
                     Question(
-                        question_id=f"{frame}.{topic.coverage_key}.{n:02d}",
-                        coverage_key=topic.coverage_key,
+                        question_id=f"{frame}.{key}.{issued[key]:02d}",
+                        coverage_key=key,
                         text=question_text,
                     )
                 )

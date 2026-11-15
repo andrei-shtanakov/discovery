@@ -315,6 +315,103 @@ _ALL_REQUIRED_COVERED = (
 )
 
 
+class TestTranslationTable:
+    """Contract v1.3: the customer brief's `## Translation table` (GC-18)."""
+
+    _ROWS = (
+        "text: t\n"
+        "entries:\n"
+        "  - id: NFR-01\n"
+        "    body: latency\n"
+        "translations:\n"
+        "  - words: «должно работать мгновенно»\n"
+        "    category: стоить\n"
+        "    constraint: [NFR-01, CON-01]\n"
+        "    assumption: «мгновенно» = p95 до 2 с\n"
+        "    confirmer: product-owner\n"
+        "    due: 2026-12-01\n"
+        "  - words: «он ничего не должен трогать»\n"
+        "    category: не делать\n"
+        "    constraint: OUT-01\n"
+    )
+
+    def test_rows_render_as_a_six_column_table_after_the_entries(self):
+        events = [answer("customer.nfr.01", "product", self._ROWS)]
+
+        text = render_brief(CUSTOMER, events, "pending")
+
+        table = text[text.index("## Translation table") :]
+        assert text.index("## Non-Functional") < text.index("## Translation table")
+        assert (
+            "| Слова заказчика | Категория | Ограничение | Допущение "
+            "| Подтверждает | Срок |"
+        ) in table
+        assert (
+            "| «должно работать мгновенно» | стоить | NFR-01, CON-01 "
+            "| «мгновенно» = p95 до 2 с | product-owner | 2026-12-01 |"
+        ) in table
+        assert "| «он ничего не должен трогать» | не делать | OUT-01 | — | — | — |" in (
+            table
+        )
+
+    def test_no_rows_means_no_section(self):
+        events = [answer("customer.goals.01", "product", "entries: []\n")]
+
+        assert "Translation table" not in render_brief(CUSTOMER, events, "pending")
+
+    def test_superseding_an_answer_replaces_its_rows(self):
+        later = (
+            "text: t\ntranslations:\n  - words: «новые слова»\n    category: делать\n"
+        )
+        events = [
+            answer("customer.nfr.01", "product", self._ROWS),
+            answer("customer.nfr.01", "product", later),
+        ]
+
+        text = render_brief(CUSTOMER, events, "pending")
+
+        assert "«новые слова»" in text
+        assert "мгновенно" not in text
+
+    @pytest.mark.parametrize("raw", ["«быстро»", "[«быстро», 3]"])
+    def test_a_pre_v13_journal_with_unchecked_translations_still_renders(self, raw):
+        """Before v1.3 intake ignored the key, so the journal may hold any shape."""
+        events = [answer("q", "product", f"text: t\ntranslations: {raw}\n")]
+
+        assert "Translation table" not in render_brief(CUSTOMER, events, "pending")
+
+
+class TestSetValuedFields:
+    """`owns` and `Category` are sets the linter reads comma-separated; the
+    bracket form `[a, b]` would hide them from GC-20/GC-21."""
+
+    def test_owns_list_renders_comma_separated(self):
+        payload = (
+            "entries:\n  - id: P-01\n    body: a sponsor\n"
+            "    owns: [process, quality]\n"
+        )
+
+        text = render_brief(CUSTOMER, [answer("q", "product", payload)], "pending")
+
+        assert "owns: process, quality" in text
+
+    def test_category_list_renders_comma_separated(self):
+        payload = (
+            "entries:\n  - id: NFR-01\n    body: budget\n    Category: [perf, cost]\n"
+        )
+
+        text = render_brief(CUSTOMER, [answer("q", "product", payload)], "pending")
+
+        assert "**Category**: perf, cost" in text
+
+    def test_traces_keep_the_bracket_form(self):
+        payload = "entries:\n  - id: FR-01\n    body: f\n    traces: [G-01, J-01]\n"
+
+        text = render_brief(CUSTOMER, [answer("q", "product", payload)], "pending")
+
+        assert "traces: [G-01, J-01]" in text
+
+
 class TestGatePassed:
     def test_true_when_all_required_covered_fr_traced_and_no_blocking_questions(self):
         events = [answer("customer.all.01", "product", _ALL_REQUIRED_COVERED)]
@@ -595,19 +692,24 @@ class TestTranscriptParsedOnce:
     callers who hold events rather than entries.
     """
 
-    def test_render_brief_calls_entries_once(self, monkeypatch):
-        events = [answer("q", "product", _ALL_REQUIRED_COVERED)]
+    def test_render_brief_parses_each_answer_once(self, monkeypatch):
+        """Entries and translation rows (contract v1.3) are two projections
+        of one parse, not two parses."""
+        events = [
+            answer("q1", "product", _ALL_REQUIRED_COVERED),
+            answer("q2", "product", "text: t\ntranslations: []\n"),
+        ]
         calls = []
-        original = render_module._entries
+        original = render_module._parse_payload
         monkeypatch.setattr(
             render_module,
-            "_entries",
-            lambda ev: (calls.append(1), original(ev))[1],
+            "_parse_payload",
+            lambda payload: (calls.append(1), original(payload))[1],
         )
 
         render_brief(CUSTOMER, events, validation="pending")
 
-        assert len(calls) == 1
+        assert len(calls) == len(events)
 
     def test_events_and_entries_entry_points_agree(self):
         events = [

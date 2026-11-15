@@ -132,6 +132,35 @@ entries:
 `'[J-02, G-01]'` cannot be told apart from a single id, and the contract's body
 parser recognises only the bracket form.
 
+A customer brief (contract v1.3) also needs a translation table: each answer
+may carry `translations`, one row per stakeholder statement, rendered as the
+brief's `## Translation table`. Columns are `words`, `category`, `constraint`,
+`assumption`, `confirmer`, `due`; an omitted cell renders as `—`. Intake refuses
+an unknown column, a `|` or line break inside a cell, and any rows in a
+non-customer session; the vocabulary
+(categories, existing ids, dates) is the linter's (GC-18/GC-19). NFRs carry
+`Category` (GC-20) and `P`/open `Q` entries carry `owns` (GC-21); a list value
+of either renders comma-separated. Rows carry no id, so they are not
+folded across answers like entries: the table is the concatenation of the
+latest answers' rows, and correcting a row means `--supersede` of the answer
+that declared it.
+
+```yaml
+text: "it has to be instant"
+entries:
+  - id: NFR-01
+    body: response latency
+    Category: perf
+    Target: p95 under 2 s
+translations:
+  - words: «должно работать мгновенно»
+    category: стоить
+    constraint: NFR-01
+    assumption: «мгновенно» = p95 до 2 с
+    confirmer: product-owner
+    due: 2026-12-01
+```
+
 ## What a caller reads
 
 Every command prints one JSON envelope on stdout and exits with a code that

@@ -16,8 +16,8 @@ from typing import Any, Protocol
 
 import yaml
 
-from discovery.contract.gate_check import FRAMES
-from discovery.payload import PayloadInvalid
+from discovery.contract.gate_check import FRAMES, TRANSLATION_HEADING
+from discovery.payload import TRANSLATION_COLUMNS, PayloadInvalid
 
 # Section headings follow the contract's §2 table, not this module's taste:
 # `J` is "Jobs-to-be-done" and `X` is "Stakeholder Conflicts" there, and a brief
@@ -52,6 +52,18 @@ _LABELLED_FIELDS = {
     # Contract v1.2: the stakeholder's words, verbatim, beside the hypothesis.
     "preference": "Preference",
 }
+
+
+# Set-valued fields the linter reads comma-separated (`_CATEGORY_RE`,
+# `_OWNS_RE`): the bracket form `[perf, cost]` would hide them from
+# GC-20/GC-21. `traces` keeps brackets — that is the only form §2 parses.
+_SET_FIELDS = {"category", "owns"}
+
+# Contract v1.3 §2: the table's header, in `TRANSLATION_COLUMNS` order.
+_TRANSLATION_HEADER = (
+    "| Слова заказчика | Категория | Ограничение | Допущение | Подтверждает | Срок |"
+)
+_EMPTY_CELL = "—"
 
 
 class SessionHeaderLike(Protocol):
@@ -96,14 +108,21 @@ def _parse_payload(payload: str) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _declarations(events: list[dict]) -> list[tuple[dict, dict[str, Any]]]:
+Parsed = list[tuple[dict, dict[str, Any]]]
+
+
+def _parsed_latest(events: list[dict]) -> Parsed:
+    """`(answer event, parsed payload)` per latest answer, journal order —
+    the one place a payload's YAML is parsed."""
+    return [
+        (answer, _parse_payload(answer.get("payload", "")))
+        for answer in _latest_answers(events)
+    ]
+
+
+def _declarations(parsed: Parsed) -> list[tuple[dict, dict[str, Any]]]:
     """Every `(answer event, raw entry)` from the latest answers, journal order."""
-    declared: list[tuple[dict, dict[str, Any]]] = []
-    for answer in _latest_answers(events):
-        parsed = _parse_payload(answer.get("payload", ""))
-        for raw in parsed.get("entries") or []:
-            declared.append((answer, raw))
-    return declared
+    return [(answer, raw) for answer, doc in parsed for raw in doc.get("entries") or []]
 
 
 def effective_entries(events: list[dict]) -> list[Entry]:
@@ -117,8 +136,13 @@ def effective_entries(events: list[dict]) -> list[Entry]:
     Decided 2026-09-11 (`@id:duplicate-entry-ids-across-answers`) after a
     live run rendered 83 instances over 76 ids.
     """
+    return _entries_of(_parsed_latest(events))
+
+
+def _entries_of(parsed: Parsed) -> list[Entry]:
+    """`effective_entries` over already-parsed answers."""
     latest: dict[str, Entry] = {}
-    for _, raw in _declarations(events):
+    for _, raw in _declarations(parsed):
         fields = {k: v for k, v in raw.items() if k not in ("id", "body")}
         latest[raw["id"]] = Entry(
             eid=raw["id"], body=raw.get("body", ""), fields=fields
@@ -130,9 +154,34 @@ def entry_holders(events: list[dict]) -> dict[str, tuple[str, str]]:
     """`entry_id -> (question_id, answer_id)` of the answer whose version is
     effective, by the same projection as `effective_entries`."""
     holders: dict[str, tuple[str, str]] = {}
-    for answer, raw in _declarations(events):
+    for answer, raw in _declarations(_parsed_latest(events)):
         holders[raw["id"]] = (answer["question_id"], answer.get("answer_id", ""))
     return holders
+
+
+def translation_rows(events: list[dict]) -> list[dict[str, Any]]:
+    """Rows of the customer brief's `## Translation table`, contract v1.3.
+
+    Read off the latest answers in journal order, so superseding an answer
+    replaces its rows the way it replaces its entries. Rows carry no id, so
+    unlike entries there is no cross-answer version to fold.
+    """
+    return _rows_of(_parsed_latest(events))
+
+
+def _rows_of(parsed: Parsed) -> list[dict[str, Any]]:
+    """`translation_rows` over already-parsed answers.
+
+    A journal written before contract v1.3 never had `translations` checked
+    at intake (the key was ignored), so anything but a list of non-empty
+    mappings is skipped here rather than iterated.
+    """
+    rows: list[dict[str, Any]] = []
+    for _, doc in parsed:
+        raw = doc.get("translations")
+        if isinstance(raw, list):
+            rows.extend(row for row in raw if isinstance(row, dict) and row)
+    return rows
 
 
 # The historical name; every reader inside this module goes through the
@@ -300,11 +349,12 @@ def _blocking_open(entries: list[Entry]) -> list[Entry]:
     ]
 
 
-def _format_field_value(value: Any) -> str:
+def _format_field_value(value: Any, *, as_set: bool = False) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, list):
-        return "[" + ", ".join(str(v) for v in value) + "]"
+        joined = ", ".join(str(v) for v in value)
+        return joined if as_set else f"[{joined}]"
     return str(value)
 
 
@@ -312,7 +362,7 @@ def _render_entry(entry: Entry) -> str:
     lines = [f"- **{entry.eid}** {entry.body}"]
     for key, value in entry.fields.items():
         label = _LABELLED_FIELDS.get(key.lower())
-        formatted = _format_field_value(value)
+        formatted = _format_field_value(value, as_set=key.lower() in _SET_FIELDS)
         if label is not None:
             lines.append(f"  **{label}**: {formatted}")
         else:
@@ -320,7 +370,24 @@ def _render_entry(entry: Entry) -> str:
     return "\n".join(lines)
 
 
-def _render_body(entries: list[Entry]) -> str:
+def _translation_cell(value: Any) -> str:
+    if value is None or value == "" or value == []:
+        return _EMPTY_CELL
+    return _format_field_value(value, as_set=True)
+
+
+def _render_translation_table(rows: list[dict[str, Any]]) -> str:
+    """`## Translation table` (contract v1.3 §2); empty string when no rows."""
+    if not rows:
+        return ""
+    lines = [TRANSLATION_HEADING, "", _TRANSLATION_HEADER, "|---|---|---|---|---|---|"]
+    for row in rows:
+        cells = (_translation_cell(row.get(column)) for column in TRANSLATION_COLUMNS)
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def _render_body(entries: list[Entry], translations: list[dict[str, Any]]) -> str:
     sections: list[str] = []
     for prefix in _SECTION_ORDER:
         section_entries = [e for e in entries if e.prefix == prefix]
@@ -329,6 +396,9 @@ def _render_body(entries: list[Entry]) -> str:
         block = [f"## {SECTION_TITLES[prefix]}", ""]
         block.extend(_render_entry(e) for e in section_entries)
         sections.append("\n".join(block))
+    table = _render_translation_table(translations)
+    if table:
+        sections.append(table)
     return "\n\n".join(sections)
 
 
@@ -343,7 +413,8 @@ def render_brief(
     inferred or computed here (DESIGN-P3) — that is `render_and_gate`'s job.
     """
     frame = header.frame
-    entries = _entries(events)
+    parsed = _parsed_latest(events)
+    entries = _entries_of(parsed)
     answered_keys = _answered_coverage_keys(events)
     coverage = _coverage(entries, frame, answered_keys)
     open_questions = [
@@ -377,5 +448,6 @@ def render_brief(
 
     frontmatter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
     title = f"# Discovery Brief — {header.target} ({frame}-фрейм)"
-    text = f"---\n{frontmatter}---\n\n{title}\n\n{_render_body(entries)}"
+    body = _render_body(entries, _rows_of(parsed))
+    text = f"---\n{frontmatter}---\n\n{title}\n\n{body}"
     return text

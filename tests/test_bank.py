@@ -104,13 +104,58 @@ def test_validate_raises_on_unknown_frame():
         _validate("bogus", [])
 
 
-def test_validate_raises_on_duplicate_coverage_key_claim():
+def test_validate_accepts_a_key_claimed_by_two_topics():
+    """Contract v1.3: blocks 2 and 7 both close `functions` (discovery#74)."""
     topics = _customer_topics_with() + [
-        Topic(coverage_key="goals", produces=["G"], questions=["q"])
+        Topic(coverage_key="functions", produces=["FR", "M", "Q"], questions=["q"])
     ]
 
-    with pytest.raises(BankInvalid, match="goals"):
-        _validate("customer", topics)
+    _validate("customer", topics)
+
+
+def test_validate_accepts_secondary_produces_beside_the_section_prefix():
+    _validate("customer", _customer_topics_with(out_of_scope=["OUT", "NFR"]))
+
+
+def test_validate_raises_when_produces_lacks_the_section_prefix():
+    with pytest.raises(BankInvalid, match="out_of_scope"):
+        _validate("customer", _customer_topics_with(out_of_scope=["NFR"]))
+
+
+def test_validate_raises_on_a_prefix_no_contract_section_knows():
+    with pytest.raises(BankInvalid, match="ZZ"):
+        _validate("customer", _customer_topics_with(goals=["G", "ZZ"]))
+
+
+def test_validate_raises_on_a_section_prefix_of_the_other_frame():
+    """`S` is an engineer section: legal upstream, solution space here."""
+    with pytest.raises(BankInvalid, match="'S'"):
+        _validate("customer", _customer_topics_with(functions=["FR", "S"]))
+
+
+def test_question_ids_run_on_across_topics_of_one_key(tmp_path):
+    """Two topics on one key must not mint the same question id twice."""
+    frame = SYNTHETIC_CUSTOMER_FRAME.replace(
+        "### Closing",
+        "### 9. Acceptance\n"
+        "<!-- coverage_key: functions; produces: FR,M -->\n"
+        "- How do we accept it?\n"
+        "- Who signs off?\n\n"
+        "### Closing",
+    )
+    (tmp_path / "customer.md").write_text(frame, encoding="utf-8")
+
+    questions = BankQuestionSource(pin="p", frames_dir=tmp_path).questions("customer")
+
+    ids = [q.question_id for q in questions]
+    assert len(ids) == len(set(ids))
+    functions = [q for q in questions if q.coverage_key == "functions"]
+    assert [q.question_id for q in functions] == [
+        "customer.functions.01",
+        "customer.functions.02",
+        "customer.functions.03",
+    ]
+    assert functions[2].text == "Who signs off?"
 
 
 def test_validate_raises_on_empty_produces_for_required_key():
