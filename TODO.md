@@ -509,7 +509,7 @@
       `approved_content_hash` (подписанные рукой на E1), чтобы не блокировать
       E2 до bootstrap репо `approval-policy`; закрыть — переодобрить
       customer-брифы через `approve` и сделать проверку хеша в `admit` тотальной.
-- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @blocked_by:todo://dispatcher/migrate-briefs-contract-v1.3 @id:admit-hash-total @epic:eco.discovery-runtime
+- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @id:admit-hash-total @epic:eco.discovery-runtime
       Миграционный долг из `@id:brief-approval-act`: пока репо политики нет,
       `approve` отвечает `unknown`, и требовать хеш от всех апстримов значило бы
       заблокировать engineer-маршрут E2 без пути выхода.
@@ -536,8 +536,11 @@
       Смигрированные брифы пройдут `approve` и получат хеш по построению,
       поэтому хеш становится тотальным после миграции и проверяется тем же живым
       `start --upstream` (`@id:upstream-v13-migration`).
+      **Блокер снят 2026-11-15:** миграция доставлена и проверена
+      (`@id:upstream-v13-migration`); единственный upstream-бриф dispatcher
+      несёт хеш, пункт actionable.
 
-- [ ] Upstream-брифы на контракте v1.3: смигрированный и переодобренный customer-бриф dispatcher проходит живой `start --upstream` @owner:github:andrei-shtanakov @blocked_by:todo://dispatcher/migrate-briefs-contract-v1.3 @id:upstream-v13-migration @epic:eco.discovery-runtime
+- [x] Upstream-брифы на контракте v1.3: смигрированный и переодобренный customer-бриф dispatcher проходит живой `start --upstream` (dispatcher#320/#321, проверено 2026-11-15) @owner:github:andrei-shtanakov @id:upstream-v13-migration @epic:eco.discovery-runtime
       Приоритет выше `@id:translations-render-minors`. После PR #75 одобренные
       customer-брифы v1.2 `admit` отвергает. Воспроизведено на копии
       `dispatcher/spec/discovery-brief-customer.md`: нет translation table, нет
@@ -552,6 +555,16 @@
       (старое одобрение изменённое содержание не покрывает). Брифы — файлы
       dispatcher: запрос `dispatcher#319`. Наша часть — живой `start --upstream`
       на клоне dispatcher после мержа, затем `@id:admit-hash-total`.
+      **Сделано 2026-11-15.** Сосед: PR `dispatcher#320` (контент v1.3, мерж
+      человеком `andrei-shtanakov`, `54c5c23`) и `#321` (подпись `approve`,
+      `76f0498`). Живая проверка на свежем клоне dispatcher `76f0498`, рантайм
+      `master` `2c421a3` через `uv run --project` (установленного `discovery` на
+      PATH нет): вендоренный линтер — PASS; `start --frame engineer --upstream
+      spec/discovery-brief-customer.md` — exit 20, `operation: ok`, копия
+      `upstream.md` байт-в-байт, `traces_to: [upstream.md]`, пин `c09b124`.
+      Отрицательные: байт, дописанный после одобрения, — exit 1, «hash does not
+      match the bytes»; прежняя v1.2 из `a69a25d` — exit 1, GC-18/20/21; сессий
+      ни один отказ не создал.
 - [ ] Хвосты рендера translation table из approve PR #75 @owner:github:andrei-shtanakov @id:translations-render-minors @epic:eco.discovery-runtime
       Оба minor, оба про край, ниже `@id:upstream-v13-migration`.
       (1) Рендер не смотрит на фрейм: `translations:` в engineer-журнале,
