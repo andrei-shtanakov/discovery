@@ -509,7 +509,7 @@
       `approved_content_hash` (подписанные рукой на E1), чтобы не блокировать
       E2 до bootstrap репо `approval-policy`; закрыть — переодобрить
       customer-брифы через `approve` и сделать проверку хеша в `admit` тотальной.
-- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @blocked_by:todo://dispatcher/reapprove-e1-briefs @id:admit-hash-total @epic:eco.discovery-runtime
+- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @blocked_by:todo://dispatcher/migrate-briefs-contract-v1.3 @id:admit-hash-total @epic:eco.discovery-runtime
       Миграционный долг из `@id:brief-approval-act`: пока репо политики нет,
       `approve` отвечает `unknown`, и требовать хеш от всех апстримов значило бы
       заблокировать engineer-маршрут E2 без пути выхода.
@@ -528,6 +528,37 @@
       (golden-run, proposals) тоже `approved` без хеша, но это dev-only
       история: после тотализации их нельзя будет подать в `--upstream`, это
       принимаем осознанно.
+      **Блокер перевешен 2026-11-15** (inbox `discovery#64`, сенсор
+      PF-BLOCKER-STALE). `dispatcher/reapprove-e1-briefs` закрыт: PR
+      `dispatcher#296`, `a69a25d`, 2026-10-01; customer-бриф несёт корректный
+      `approved_content_hash`. Но после перепина v1.3 (PR #75) этот бриф `admit`
+      не проходит линтер вовсе, и тотальный хеш сейчас ничего не защищает.
+      Смигрированные брифы пройдут `approve` и получат хеш по построению,
+      поэтому хеш становится тотальным после миграции и проверяется тем же живым
+      `start --upstream` (`@id:upstream-v13-migration`).
+
+- [ ] Upstream-брифы на контракте v1.3: смигрированный и переодобренный customer-бриф dispatcher проходит живой `start --upstream` @owner:github:andrei-shtanakov @blocked_by:todo://dispatcher/migrate-briefs-contract-v1.3 @id:upstream-v13-migration @epic:eco.discovery-runtime
+      Приоритет выше `@id:translations-render-minors`. После PR #75 одобренные
+      customer-брифы v1.2 `admit` отвергает. Воспроизведено на копии
+      `dispatcher/spec/discovery-brief-customer.md`: нет translation table, нет
+      NFR `cost`, не названы владельцы четырёх областей. Ошибки относительных
+      ссылок копии (GC-16) — отдельный артефакт копирования, вывод не меняют.
+      Решение владельца 2026-11-15: **явная миграция с повторным человеческим
+      одобрением**, без режима совместимости со старым пином: приём под старым
+      пином потребовал бы правил выбора доверенной версии контракта. Порядок:
+      прежние одобренные версии остаются в истории; используемые брифы
+      дополняются требованиями v1.3 (недостающее — со стейкхолдером или
+      открытыми `Q-NN`); новый PR → человеческий мерж → `discovery approve`
+      (старое одобрение изменённое содержание не покрывает). Брифы — файлы
+      dispatcher: запрос `dispatcher#319`. Наша часть — живой `start --upstream`
+      на клоне dispatcher после мержа, затем `@id:admit-hash-total`.
+- [ ] Хвосты рендера translation table из approve PR #75 @owner:github:andrei-shtanakov @id:translations-render-minors @epic:eco.discovery-runtime
+      Оба minor, оба про край, ниже `@id:upstream-v13-migration`.
+      (1) Рендер не смотрит на фрейм: `translations:` в engineer-журнале,
+      записанном до PR #75 (приём тогда ключ игнорировал), попадёт в бриф без
+      проверки GC-18. Новые ответы отвергаются на приёме. (2) Строка `- {}`
+      принимается на приёме, но молча исчезает при рендере — отвергать на
+      приёме.
 
 - [x] Публичная команда `discovery show`: read-only вид сессии вместо импорта внутреннего API зондом devtools (PR #72) @owner:github:andrei-shtanakov @id:discovery-session-view @epic:eco.discovery-runtime
       Inbox `discovery#70` от devtools: `lite/interview_probe.py` исполнялся
