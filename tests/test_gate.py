@@ -32,6 +32,24 @@ def answer(question_id, role, payload):
 CUSTOMER = Header(frame="customer")
 
 _ALL_REQUIRED_COVERED = (
+    # Contract v1.3 (GC-18/GC-19): one row per required category. Kept
+    # ahead of `entries:` so tests can append entries to the string.
+    "translations:\n"
+    "  - words: «экспорт за секунды»\n"
+    "    category: делать\n"
+    "    constraint: FR-01\n"
+    "  - words: «внешнее не трогать»\n"
+    "    category: не делать\n"
+    "    constraint: OUT-01\n"
+    "  - words: «должно быть быстро и недорого»\n"
+    "    category: стоить\n"
+    "    constraint: [NFR-01, NFR-02]\n"
+    "    assumption: «быстро» = p95 до 2 с\n"
+    "    confirmer: product-owner\n"
+    "    due: 2026-12-01\n"
+    "  - words: «только на наших серверах»\n"
+    "    category: доказывать\n"
+    "    constraint: CON-01\n"
     "entries:\n"
     "  - id: G-01\n"
     "    body: a goal\n"
@@ -46,7 +64,12 @@ _ALL_REQUIRED_COVERED = (
     "    traces: [G-01]\n"
     "  - id: NFR-01\n"
     "    body: a non-functional requirement\n"
-    "    Acceptance: yes\n"
+    "    Category: perf\n"
+    "    Target: p95 under 2 s\n"
+    "  - id: NFR-02\n"
+    "    body: a running budget\n"
+    "    Category: [cost]\n"
+    "    Target: at most 300 $ a month\n"
     "  - id: CON-01\n"
     "    body: a constraint\n"
     "  - id: M-01\n"
@@ -54,6 +77,15 @@ _ALL_REQUIRED_COVERED = (
     "    traces: [G-01]\n"
     "  - id: OUT-01\n"
     "    body: an out-of-scope item\n"
+    # Contract v1.3 (GC-21): the four owner domains, named or still open.
+    "  - id: P-02\n"
+    "    body: the sponsor\n"
+    "    owns: [process, quality]\n"
+    "  - id: Q-01\n"
+    "    body: who owns the data and runs it after launch?\n"
+    "    owns: data, operations\n"
+    "    owner_role: product\n"
+    "    blocking: false\n"
 )
 
 
@@ -362,3 +394,20 @@ class TestTwoPassInvariant:
         independent = gate_check.check(result.text, base_dir=tmp_path)
 
         assert [str(f) for f in independent] == result.findings
+
+
+class TestContractV13CustomerRules:
+    """Contract v1.3: a customer brief without the translation table, NFR
+    categories and named owners no longer passes (discovery#74)."""
+
+    def test_a_v12_shaped_brief_fails_on_gc_18_20_21(self, tmp_path):
+        v12 = _ALL_REQUIRED_COVERED[_ALL_REQUIRED_COVERED.index("entries:") :]
+        v12 = v12.replace("    Category: perf\n", "").replace("    owns:", "    x:")
+
+        result = render_and_gate(CUSTOMER, [answer("q", "product", v12)], tmp_path)
+
+        assert result.status == "fail"
+        rules = {f.split()[0] for f in result.findings}
+        # No table at all is GC-18 alone: the linter does not go on to count
+        # the categories (GC-19) of a section that is not there.
+        assert {"GC-18", "GC-20", "GC-21"} <= rules

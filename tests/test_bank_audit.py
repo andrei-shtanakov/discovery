@@ -57,7 +57,7 @@ class TestClassify:
 
 
 class TestAuditFrame:
-    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 13)])
+    @pytest.mark.parametrize("frame,issued", [("customer", 59), ("engineer", 13)])
     def test_audits_exactly_the_issued_questions(self, frame, issued):
         audit = bank_audit.audit_frame(frame, FRAMES)
         assert len(audit.questions) == issued
@@ -116,16 +116,17 @@ class TestBaseline:
         current = bank_audit.snapshot(FRAMES)
         assert current["pin"], "a snapshot without its pin cannot be attributed"
 
-    @pytest.mark.parametrize("frame,issued", [("customer", 19), ("engineer", 13)])
+    @pytest.mark.parametrize("frame,issued", [("customer", 59), ("engineer", 13)])
     def test_digests_cover_exactly_the_issued_questions(self, frame, issued):
         current = bank_audit.snapshot(FRAMES)
         assert len(current["frames"][frame]["digests"]) == issued
 
     def test_leading_count_excludes_advisory_only_questions(self):
         current = bank_audit.snapshot(FRAMES)
-        # customer: personas.01 + nfr.02 are answer_menu (leading); jobs.01 is
-        # advisory-only and must not be counted.
-        assert current["frames"]["customer"]["leading"] == 2
+        # customer (contract v1.3, enterprise bank): nfr.05 is answer_menu —
+        # "(политики, справочники)" reads as examples, not a menu, but the
+        # heuristic is advisory and the baseline records it as such.
+        assert current["frames"]["customer"]["leading"] == 1
         # engineer: interfaces.01 is answer_menu (leading). The advisory-only
         # feasibility_review.02/.03 left the bank at contract v1.2: they were
         # composer instructions, now `> ` lines the bank never issues.
@@ -142,10 +143,7 @@ class TestBaseline:
             (rigged / name).write_text(
                 (FRAMES / name).read_text(encoding="utf-8"), encoding="utf-8"
             )
-        original = (
-            "- Какую проблему решаем? Как это болит сегодня — на конкретном "
-            "недавнем примере?"
-        )
+        original = "- Какую проблему решаем и что будет, если её не решать?"
         reworded = "- Это ведь и есть проблема, не так ли?"
         customer_text = (rigged / "customer.md").read_text(encoding="utf-8")
         assert customer_text.count(original) == 1

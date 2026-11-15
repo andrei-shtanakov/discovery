@@ -22,6 +22,18 @@ ID_RE = re.compile(r"^[A-Z]+-\d+$")
 # trace. Refusing instead of guessing is the point (§7) — do not "fix" this
 # asymmetry by normalising here too.
 LIST_FIELDS = {"traces"}
+# Contract v1.3, customer frame: one row of `## Translation table` per
+# stakeholder statement. Column order is the contract's; `render` owns it.
+TRANSLATION_COLUMNS = (
+    "words",
+    "category",
+    "constraint",
+    "assumption",
+    "confirmer",
+    "due",
+)
+# The linter splits a row on `|` and reads the table line by line.
+_TABLE_BREAKERS = ("|", "\n", "\r")
 
 
 class PayloadInvalid(Exception):
@@ -43,6 +55,7 @@ class AnswerPayload:
 
     text: str
     entries: list[Entry]
+    translations: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _parse_entry(item: Any) -> Entry:
@@ -72,7 +85,8 @@ def parse_payload(raw: str) -> AnswerPayload:
 
     Raises `PayloadInvalid` on a YAML syntax error, a non-mapping document,
     a missing `text` key, a non-list `entries` value, an entry without an
-    `id`, an entry `id` not matching `ID_RE`, or one id declared twice.
+    `id`, an entry `id` not matching `ID_RE`, one id declared twice, or a
+    malformed `translations` list.
     """
     try:
         doc = yaml.safe_load(raw)
@@ -86,7 +100,40 @@ def parse_payload(raw: str) -> AnswerPayload:
         raise PayloadInvalid(f"entries must be a list: {raw_entries!r}")
     entries = [_parse_entry(item) for item in raw_entries]
     _refuse_duplicate_ids(entries)
-    return AnswerPayload(text=text, entries=entries)
+    translations = _parse_translations(doc.get("translations"))
+    return AnswerPayload(text=text, entries=entries, translations=translations)
+
+
+def _parse_translations(raw: Any) -> list[dict[str, Any]]:
+    """Validate `translations` structurally; its vocabulary is the linter's.
+
+    Only what would corrupt the rendered table is refused here: a non-list,
+    a row that is not a mapping, a column the contract does not have (a
+    misspelt `confirms:` would otherwise render as `—` and read as "no
+    assumption"), and a `|` or newline that would shift the columns GC-18
+    checks. Whether the category is in the dictionary is GC-18's call.
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise PayloadInvalid(f"translations must be a list: {raw!r}")
+    for row in raw:
+        if not isinstance(row, dict):
+            raise PayloadInvalid(f"translations row is not a mapping: {row!r}")
+        unknown = sorted(set(row) - set(TRANSLATION_COLUMNS))
+        if unknown:
+            raise PayloadInvalid(
+                f"translations row has unknown column(s) {unknown}; "
+                f"expected {list(TRANSLATION_COLUMNS)}"
+            )
+        for column, value in row.items():
+            cells = value if isinstance(value, list) else [value]
+            if any(b in str(cell) for cell in cells for b in _TABLE_BREAKERS):
+                raise PayloadInvalid(
+                    f"translations {column!r} must not contain '|' or a "
+                    f"line break: {value!r}"
+                )
+    return raw
 
 
 def _refuse_duplicate_ids(entries: list[Entry]) -> None:
