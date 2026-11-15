@@ -170,8 +170,18 @@ def translation_rows(events: list[dict]) -> list[dict[str, Any]]:
 
 
 def _rows_of(parsed: Parsed) -> list[dict[str, Any]]:
-    """`translation_rows` over already-parsed answers."""
-    return [row for _, doc in parsed for row in doc.get("translations") or [] if row]
+    """`translation_rows` over already-parsed answers.
+
+    A journal written before contract v1.3 never had `translations` checked
+    at intake (the key was ignored), so anything but a list of non-empty
+    mappings is skipped here rather than iterated.
+    """
+    rows: list[dict[str, Any]] = []
+    for _, doc in parsed:
+        raw = doc.get("translations")
+        if isinstance(raw, list):
+            rows.extend(row for row in raw if isinstance(row, dict) and row)
+    return rows
 
 
 # The historical name; every reader inside this module goes through the

@@ -373,6 +373,13 @@ class TestTranslationTable:
         assert "«новые слова»" in text
         assert "мгновенно" not in text
 
+    @pytest.mark.parametrize("raw", ["«быстро»", "[«быстро», 3]"])
+    def test_a_pre_v13_journal_with_unchecked_translations_still_renders(self, raw):
+        """Before v1.3 intake ignored the key, so the journal may hold any shape."""
+        events = [answer("q", "product", f"text: t\ntranslations: {raw}\n")]
+
+        assert "Translation table" not in render_brief(CUSTOMER, events, "pending")
+
 
 class TestSetValuedFields:
     """`owns` and `Category` are sets the linter reads comma-separated; the
