@@ -127,6 +127,12 @@ def test_validate_raises_on_a_prefix_no_contract_section_knows():
         _validate("customer", _customer_topics_with(goals=["G", "ZZ"]))
 
 
+def test_validate_raises_on_a_section_prefix_of_the_other_frame():
+    """`S` is an engineer section: legal upstream, solution space here."""
+    with pytest.raises(BankInvalid, match="'S'"):
+        _validate("customer", _customer_topics_with(functions=["FR", "S"]))
+
+
 def test_question_ids_run_on_across_topics_of_one_key(tmp_path):
     """Two topics on one key must not mint the same question id twice."""
     frame = SYNTHETIC_CUSTOMER_FRAME.replace(

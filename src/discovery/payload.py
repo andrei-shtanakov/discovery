@@ -136,6 +136,16 @@ def _parse_translations(raw: Any) -> list[dict[str, Any]]:
     return raw
 
 
+def refuse_foreign_translations(payload: AnswerPayload, frame: str) -> None:
+    """Translation table is the customer frame's discovery outcome (contract
+    v1.3 §3); GC-18 never reads it in another frame, so rows there would
+    reach the brief unchecked. Refused at intake instead of dropped."""
+    if payload.translations and frame != "customer":
+        raise PayloadInvalid(
+            f"translations belong to the customer frame only, got {frame!r}"
+        )
+
+
 def _refuse_duplicate_ids(entries: list[Entry]) -> None:
     """One id at most once per payload.
 

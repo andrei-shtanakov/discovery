@@ -42,9 +42,10 @@ class TestClassify:
     def test_innocent_pochemu_vy_question_stays_clean(self):
         assert bank_audit.classify("Почему вы выбрали этот стек?") == []
 
-    def test_real_bank_pochemu_question_stays_clean(self):
-        # customer.goals.02 — a real bank bullet; the narrow "до сих пор не"
-        # alternative must not catch this neighbour.
+    def test_former_bank_pochemu_question_stays_clean(self):
+        # Was customer.goals.02 until contract v1.3 replaced the bank; kept
+        # as a synthetic neighbour the narrow "до сих пор не" alternative
+        # must not catch.
         text = "Почему сейчас? Что случится, если ничего не делать полгода?"
         assert bank_audit.classify(text) == []
 
@@ -131,6 +132,30 @@ class TestBaseline:
         # feasibility_review.02/.03 left the bank at contract v1.2: they were
         # composer instructions, now `> ` lines the bank never issues.
         assert current["frames"]["engineer"]["leading"] == 1
+
+    def test_an_advisory_only_bullet_is_flagged_but_not_leading(self, tmp_path):
+        """The real v1.3 bank has no advisory-only question, so the counts
+        above no longer tell the filter apart from `leading = flagged`; a
+        rigged bank with one statement bullet does."""
+        rigged = tmp_path / "frames"
+        rigged.mkdir()
+        for name in ("customer.md", "engineer.md"):
+            (rigged / name).write_text(
+                (FRAMES / name).read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        original = "- Какую проблему решаем и что будет, если её не решать?"
+        customer_text = (rigged / "customer.md").read_text(encoding="utf-8")
+        assert customer_text.count(original) == 1
+        (rigged / "customer.md").write_text(
+            customer_text.replace(original, "- Опишите проблему.", 1),
+            encoding="utf-8",
+        )
+
+        rigged_customer = bank_audit.snapshot(rigged)["frames"]["customer"]
+        real_customer = bank_audit.snapshot(FRAMES)["frames"]["customer"]
+
+        assert rigged_customer["questions"]["customer.goals.01"] == ["advisory"]
+        assert rigged_customer["leading"] == real_customer["leading"]
 
     def test_rewording_an_unflagged_question_changes_the_snapshot(self, tmp_path):
         """A reworded question that no rule matches must still fail the

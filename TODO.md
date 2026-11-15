@@ -554,7 +554,7 @@
       вопросов). Парсер банка правки не потребовал — `> `-строки он и так не
       читал. Readiness не меняется: §4 формула та же. Стенд L3 после перепина
       несвеж (`@id:l3-stand-freshness`).
-- [ ] Перепин контракта v1.3 (enterprise-фрейм заказчика): банк 9 блоков, translation table, `**Category**` у NFR, владельцы `owns:` (GC-18…GC-21) @owner:github:andrei-shtanakov @id:repin-contract-v1.3 @epic:eco.discovery-runtime
+- [x] Перепин контракта v1.3 (enterprise-фрейм заказчика): банк 9 блоков, translation table, `**Category**` у NFR, владельцы `owns:` (GC-18…GC-21) (PR #75) @owner:github:andrei-shtanakov @id:repin-contract-v1.3 @epic:eco.discovery-runtime
       Inbox `discovery#74` от `discovery-toolkit#30` (PR #31, `c09b124`). Хеши
       контракта и фрейма заказчика сверены с issue; engineer-фрейм не менялся.
       Наша часть: банк принимает несколько тем на один ключ (`functions`, `nfr`,

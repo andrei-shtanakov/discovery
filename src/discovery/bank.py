@@ -86,16 +86,19 @@ def parse_frame(text: str) -> list[Topic]:
     return topics
 
 
-# Prefixes legal in `produces`: every contract section of either frame, plus
-# the Q/X invariants every topic may raise — the same set the upstream bank
-# test (`test_frames_markers.ALLOWED_PREFIXES`) accepts.
-_ALLOWED_PREFIXES = {"Q", "X"} | {
-    prefix
-    for frame_def in gate_check.FRAMES.values()
-    for group in ("required", "optional")
-    for prefix in frame_def[group].values()
-    if prefix
-}
+# Prefixes legal in `produces` of a frame: that frame's own sections plus the
+# Q/X invariants every topic may raise. Stricter than upstream's
+# `test_frames_markers.ALLOWED_PREFIXES`, which unions both frames: a
+# customer topic producing `S`/`IF`/`AP` would leak solution space into a
+# problem-space brief, and the brief-level GC-14 is only a warning.
+_INVARIANT_PREFIXES = {"Q", "X"}
+
+
+def _allowed_prefixes(frame: str) -> set[str]:
+    """`frame`'s section prefixes plus the Q/X invariants."""
+    frame_def = gate_check.FRAMES[frame]
+    sections = {**frame_def["required"], **frame_def["optional"]}
+    return _INVARIANT_PREFIXES | {p for p in sections.values() if p}
 
 
 def _validate(frame: str, topics: list[Topic]) -> None:
@@ -105,7 +108,7 @@ def _validate(frame: str, topics: list[Topic]) -> None:
     One key may be claimed by several topics (contract v1.3: blocks 2 and 7
     both close `functions`). Each topic of a key with a section must list
     that section's prefix among its `produces`; further prefixes are allowed
-    as long as some contract section knows them. A required key whose
+    as long as the frame itself has those sections. A required key whose
     upstream value is `None` (engineer's `feasibility_review`) names a
     process, not a section, so it has no prefix to demand.
     """
@@ -122,7 +125,7 @@ def _validate(frame: str, topics: list[Topic]) -> None:
     for topic in topics:
         if topic.coverage_key is None:
             continue
-        unknown = sorted(set(topic.produces) - _ALLOWED_PREFIXES)
+        unknown = sorted(set(topic.produces) - _allowed_prefixes(frame))
         if unknown:
             raise BankInvalid(
                 f"topic {topic.coverage_key!r} in frame {frame!r} "

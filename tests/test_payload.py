@@ -2,7 +2,12 @@
 
 import pytest
 
-from discovery.payload import Entry, PayloadInvalid, parse_payload
+from discovery.payload import (
+    Entry,
+    PayloadInvalid,
+    parse_payload,
+    refuse_foreign_translations,
+)
 
 
 def test_text_only_payload_has_no_entries():
@@ -179,3 +184,16 @@ class TestTranslations:
                 "text: t\ntranslations:\n"
                 f'  - words: "{cell}"\n    category: делать\n    constraint: FR-01\n'
             )
+
+    def test_rows_outside_the_customer_frame_are_refused(self):
+        """GC-18 reads the table only in customer briefs (contract v1.3)."""
+        payload = parse_payload(
+            "text: t\ntranslations:\n  - words: w\n    category: делать\n"
+        )
+
+        refuse_foreign_translations(payload, "customer")
+        with pytest.raises(PayloadInvalid, match="engineer"):
+            refuse_foreign_translations(payload, "engineer")
+
+    def test_engineer_answer_without_rows_is_accepted(self):
+        refuse_foreign_translations(parse_payload("text: t\n"), "engineer")

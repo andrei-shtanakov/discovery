@@ -136,10 +136,14 @@ A customer brief (contract v1.3) also needs a translation table: each answer
 may carry `translations`, one row per stakeholder statement, rendered as the
 brief's `## Translation table`. Columns are `words`, `category`, `constraint`,
 `assumption`, `confirmer`, `due`; an omitted cell renders as `—`. Intake refuses
-an unknown column and a `|` or line break inside a cell; the vocabulary
+an unknown column, a `|` or line break inside a cell, and any rows in a
+non-customer session; the vocabulary
 (categories, existing ids, dates) is the linter's (GC-18/GC-19). NFRs carry
 `Category` (GC-20) and `P`/open `Q` entries carry `owns` (GC-21); a list value
-of either renders comma-separated.
+of either renders comma-separated. Rows carry no id, so they are not
+folded across answers like entries: the table is the concatenation of the
+latest answers' rows, and correcting a row means `--supersede` of the answer
+that declared it.
 
 ```yaml
 text: "it has to be instant"
