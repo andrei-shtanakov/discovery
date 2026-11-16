@@ -221,6 +221,19 @@ class TestFromDarkFactoryConfig:
 
         assert banner is None
 
+    def test_strict_config_with_review_table_still_loads(self, monkeypatch):
+        # devtools#768 added an optional [review] table; a vendored loader
+        # without it refuses the whole config ("неизвестный ключ review").
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        path = _config_file(monkeypatch)
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text + '\n[review]\npause_after = ["design"]\n', encoding="utf-8"
+        )
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        assert policy.resolve(forge) == (frozenset({"bob"}), None)
+
     def test_strict_policy_diverging_from_vendored_source_refused(self, monkeypatch):
         monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
         path = _config_file(monkeypatch)
