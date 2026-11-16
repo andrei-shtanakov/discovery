@@ -34,10 +34,10 @@ from pathlib import Path
 
 import pytest
 
-from discovery import cli
+from discovery import approval, cli
 from discovery.contract import gate_check
 
-APPROVED_UPSTREAM = """---
+HAND_APPROVED_UPSTREAM = """---
 schema: discovery-brief
 schema_version: 1
 spec_stage: discovery
@@ -117,6 +117,16 @@ coverage:
 | «быстро и дёшево» | стоить | NFR-01, NFR-02 | p95 до 30 с | customer | 2026-12-01 |
 | «API курьеров не меняем» | доказывать | CON-01 | — | — | — |
 """
+
+_MERGE = approval.MergeEvent("andrei-shtanakov", "2026-09-22T10:00:00Z", "abc")
+
+
+def signed(text: str) -> str:
+    """`text` as `discovery approve` would stamp it: `admit` takes nothing else."""
+    return approval.stamp(approval.withdraw(text), _MERGE)
+
+
+APPROVED_UPSTREAM = signed(HAND_APPROVED_UPSTREAM)
 
 
 @pytest.fixture(autouse=True)
@@ -268,37 +278,51 @@ class TestUpstreamRefusals:
         assert code == 1
         assert session_ids(tmp_path) == []
 
+    # Each source is re-signed after its mutation where a signature can
+    # exist: the self-hash covers the whole frontmatter and body, so a
+    # mutated-but-unsigned source would be refused for its stale hash and
+    # the case would pass without reaching the check it names.
     @pytest.mark.parametrize(
-        "mutate,why",
+        "source,why",
         [
             (
-                lambda t: t.replace("status: approved", "status: draft"),
+                APPROVED_UPSTREAM.replace("status: approved", "status: draft"),
                 "an unapproved upstream is what GC-12 exists to reject",
             ),
             (
-                lambda t: t.replace("frame: customer", "frame: engineer"),
+                signed(
+                    HAND_APPROVED_UPSTREAM.replace("frame: customer", "frame: engineer")
+                ),
                 "an engineer brief is not an upstream for the engineer frame",
             ),
             (
-                lambda t: t.replace("schema: discovery-brief", "schema: tasks"),
+                signed(
+                    HAND_APPROVED_UPSTREAM.replace(
+                        "schema: discovery-brief", "schema: tasks"
+                    )
+                ),
                 "a document that is not a discovery-brief at all",
             ),
             (
-                lambda t: t.replace("  **Priority**: Must\n", ""),
+                signed(HAND_APPROVED_UPSTREAM.replace("  **Priority**: Must\n", "")),
                 "a brief the vendored linter reports errors on (GC-08, GC-11)",
             ),
             (
-                lambda t: t.split("---\n", 2)[2],
+                APPROVED_UPSTREAM.split("---\n", 2)[2],
                 "a document with no frontmatter to read",
             ),
         ],
+        ids=["draft", "engineer-frame", "not-a-brief", "lint-errors", "no-frontmatter"],
     )
     def test_upstream_that_is_not_an_approved_customer_brief_is_refused(
-        self, capsys, tmp_path, mutate, why
+        self, capsys, tmp_path, source, why
     ):
         """Validation happens before the session exists: otherwise almost a
         whole engineer interview can be run against the wrong source."""
-        upstream = write_upstream(tmp_path, mutate(APPROVED_UPSTREAM))
+        assert source != APPROVED_UPSTREAM, why
+        if source.startswith("---\n"):
+            assert approval.verify(source) != approval.DEBT_SELF_HASH, why
+        upstream = write_upstream(tmp_path, source)
 
         code, envelope = drive(
             [
@@ -345,8 +369,9 @@ class TestUpstreamRefusals:
         the command would print no envelope at all, breaking the one promise
         every command makes. `drive` parses stdout as JSON, so a traceback
         fails this case rather than passing it quietly."""
-        mutated = mutate(APPROVED_UPSTREAM)
-        assert mutated != APPROVED_UPSTREAM, trap
+        mutated = mutate(HAND_APPROVED_UPSTREAM)
+        assert mutated != HAND_APPROVED_UPSTREAM, trap
+        mutated = signed(mutated)
         upstream = write_upstream(tmp_path, mutated)
 
         code, envelope = drive(

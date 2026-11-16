@@ -6,8 +6,9 @@ the claim to the bytes. Each case isolates one claim: a brief stamped by
 refused — the hash no longer covers these bytes, and the engineer
 interview would run against a document nobody approved; a brief marked
 `approved` with no hash at all (stamped by hand before the act existed) is
-still admitted, as migration debt named in `TODO.md`, not silently
-promoted to a signature.
+refused too, and so is a hash with the signature fields blanked: the
+migration debt is closed (`TODO.md` `@id:admit-hash-total`), and only
+`discovery approve` makes a brief admissible.
 """
 
 from __future__ import annotations
@@ -135,6 +136,17 @@ class TestSignature:
         with pytest.raises(UpstreamRejected, match=approval.SELF_HASH_KEY):
             admit(upstream(edited))
 
-    def test_a_hand_approved_brief_without_a_hash_is_still_admitted(self, upstream):
-        """Migration debt, admitted as before — see TODO.md brief-approval-act."""
-        assert admit(upstream(APPROVED_BY_HAND)) == APPROVED_BY_HAND
+    def test_a_hand_approved_brief_without_a_hash_is_refused(self, upstream):
+        """Was migration debt, admitted until every upstream in use carried a
+        hash — see TODO.md admit-hash-total."""
+        with pytest.raises(UpstreamRejected, match="discovery approve"):
+            admit(upstream(APPROVED_BY_HAND))
+
+    def test_a_matching_hash_with_a_blanked_approver_is_refused(self, upstream):
+        """The envelope is cut from the hash, so blanking `approver` leaves
+        it matching; the signature is still incomplete and names nobody."""
+        unsigned = STAMPED.replace("approver: andrei-shtanakov", "approver: null")
+        assert approval.verify(unsigned) == approval.DEBT_UNSIGNED
+
+        with pytest.raises(UpstreamRejected, match="discovery approve"):
+            admit(upstream(unsigned))

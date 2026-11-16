@@ -70,13 +70,19 @@ def admit(path: Path) -> str:
     # `approved` is a claim; the self-hash is what ties it to these bytes.
     # A brief edited after `discovery approve` stamped it carries a hash
     # that no longer matches, and is not the document a human merged. A
-    # brief with no hash at all is one stamped before the act existed:
-    # migration debt, admitted as before until the policy source exists
-    # to re-approve it (TODO.md `@id:brief-approval-act`).
-    if approval.verify(text) == approval.DEBT_SELF_HASH:
+    # brief with no hash, or with signature fields blanked, was never
+    # stamped by `approve`: the hand-signed migration debt is closed
+    # (TODO.md `@id:admit-hash-total`), so it is refused too.
+    debt = approval.verify(text)
+    if debt == approval.DEBT_SELF_HASH:
         raise UpstreamRejected(
             f"{path}: status is 'approved' but {approval.SELF_HASH_KEY} does "
             "not match the bytes: the brief was edited after its approval"
+        )
+    if debt is not None:
+        raise UpstreamRejected(
+            f"{path}: status is 'approved' but the signature is incomplete "
+            f"({debt}): approve the merged brief with `discovery approve`"
         )
     errors = [f for f in _lint(text, path) if f.level == "error"]
     if errors:
