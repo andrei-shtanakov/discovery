@@ -165,6 +165,11 @@ class TestTranslations:
         with pytest.raises(PayloadInvalid, match="translations"):
             parse_payload("text: t\ntranslations:\n  - «быстро»\n")
 
+    def test_an_empty_row_is_invalid(self):
+        """`- {}` names no statement; render would drop it without a word."""
+        with pytest.raises(PayloadInvalid, match="empty"):
+            parse_payload("text: t\ntranslations:\n  - {}\n")
+
     def test_an_unknown_column_is_invalid(self):
         """A misspelt column would silently render as `—` and pass as
         "no assumption" — refuse it instead."""

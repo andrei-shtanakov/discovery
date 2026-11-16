@@ -32,6 +32,8 @@ TRANSLATION_COLUMNS = (
     "confirmer",
     "due",
 )
+# The one frame whose brief carries the table; GC-18 reads no other.
+TRANSLATION_FRAME = "customer"
 # The linter splits a row on `|` and reads the table line by line.
 _TABLE_BREAKERS = ("|", "\n", "\r")
 
@@ -108,7 +110,8 @@ def _parse_translations(raw: Any) -> list[dict[str, Any]]:
     """Validate `translations` structurally; its vocabulary is the linter's.
 
     Only what would corrupt the rendered table is refused here: a non-list,
-    a row that is not a mapping, a column the contract does not have (a
+    a row that is not a mapping or is empty (render would drop it without a
+    word), a column the contract does not have (a
     misspelt `confirms:` would otherwise render as `—` and read as "no
     assumption"), and a `|` or newline that would shift the columns GC-18
     checks. Whether the category is in the dictionary is GC-18's call.
@@ -120,6 +123,8 @@ def _parse_translations(raw: Any) -> list[dict[str, Any]]:
     for row in raw:
         if not isinstance(row, dict):
             raise PayloadInvalid(f"translations row is not a mapping: {row!r}")
+        if not row:
+            raise PayloadInvalid("translations row is empty: it names no statement")
         unknown = sorted(set(row) - set(TRANSLATION_COLUMNS))
         if unknown:
             raise PayloadInvalid(
@@ -140,9 +145,9 @@ def refuse_foreign_translations(payload: AnswerPayload, frame: str) -> None:
     """Translation table is the customer frame's discovery outcome (contract
     v1.3 §3); GC-18 never reads it in another frame, so rows there would
     reach the brief unchecked. Refused at intake instead of dropped."""
-    if payload.translations and frame != "customer":
+    if payload.translations and frame != TRANSLATION_FRAME:
         raise PayloadInvalid(
-            f"translations belong to the customer frame only, got {frame!r}"
+            f"translations belong to the {TRANSLATION_FRAME} frame only, got {frame!r}"
         )
 
 
