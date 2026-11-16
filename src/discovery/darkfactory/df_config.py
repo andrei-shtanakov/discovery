@@ -83,17 +83,25 @@ TEST_RELAXATIONS: tuple[str, ...] = (
         "корень доверия df (/etc/df/trust.toml) не используется:"
         " акт — по мержу (режим до миграции)"
     ),
+    "акт человека не требуется (test): candidate-PR мержит раннер после зелёных проверок",
+    "класс актора не применяется (test): finalize не сверяет класс актора; kill switch действует",
+    "утверждение задач человеком не требуется (test): tasks-PR, spec approve и approve-PR проводит раннер",
+    "мерж PR с кодом — за вами (test): приёмка проверяет PR с кодом, но не мержит его",
+    "проверок нет (test): у PR нет .github/workflows и чеков — CI не ждём; чеки CI вне GitHub Actions, пришедшие позже 2 минут, не учитываются",
+    "одна учётка GitHub: accounts.human может совпадать с accounts.agent",
 )
+TEST_BANNER_HEADER = "режим test: по сравнению со strict выключено"
 _LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
 MODES = ("strict", "test")
 
-_TOP = {"schema", "mode", "accounts", "policy", "workspace", "harness", "app"}
+_TOP = {"schema", "mode", "accounts", "policy", "workspace", "harness", "app", "review"}
 _TABLES = {
     "accounts": ("human", "agent", "human_gh_config_dir", "agent_gh_config_dir"),
     "policy": ("repo", "ref", "path"),
     "workspace": ("root",),
     "harness": ("author", "model"),
     "app": ("id", "key_file"),
+    "review": ("pause_after",),
 }
 _GH_DIR_KEYS = ("human_gh_config_dir", "agent_gh_config_dir")
 
@@ -133,6 +141,7 @@ class DfConfig:
     author_model: str
     app_id: int | None
     app_key_file: Path | None
+    review_pause_after: tuple[str, ...] = ()
 
 
 def config_home(env: Mapping[str, str]) -> Path:
@@ -146,10 +155,21 @@ def config_home(env: Mapping[str, str]) -> Path:
 
 
 def test_banner(cfg: DfConfig) -> str | None:
-    """Баннер режима test (что выключено); в strict — `None`."""
+    """Баннер режима test списком (что выключено); в strict — `None`."""
     if cfg.mode == "strict":
         return None
-    return "режим test: выключено — " + "; ".join(TEST_RELAXATIONS)
+    items = "\n".join(f"  - {item}" for item in TEST_RELAXATIONS)
+    return f"{TEST_BANNER_HEADER}\n{items}"
+
+
+def test_banner_line(cfg: DfConfig) -> str | None:
+    """Одна строка о режиме test (список — в `dfl status -v`); в strict — `None`."""
+    if cfg.mode == "strict":
+        return None
+    return (
+        f"режим test: ослаблено {len(TEST_RELAXATIONS)} проверок"
+        " — список: dfl status -v"
+    )
 
 
 def config_path(env: Mapping[str, str]) -> Path:
@@ -209,6 +229,16 @@ def _require_canonical(parser: _Parser, path: Path, read: os.stat_result) -> Non
             f"режим test принимается только из {canonical}; конфиг "
             f"прочитан из {path} (перенаправление XDG_CONFIG_HOME/HOME)",
         )
+
+
+def mode_or_strict(env: Mapping[str, str] = os.environ) -> Literal["strict", "test"]:
+    """Режим конфига: файла нет (`lexists` ложно, висячая ссылка — «есть») —
+    `strict`; иначе `load(env).mode`. Битый конфиг — `ConfigError`.
+
+    Единственное правило «нет файла = strict»."""
+    if not os.path.lexists(config_path(env)):
+        return "strict"
+    return load(env).mode
 
 
 def workspace_root(env: Mapping[str, str] | None = None) -> Path:
@@ -321,7 +351,21 @@ class _Parser:
             app_key_file=None
             if app is None
             else self.path_value(app, "key_file", "app.key_file"),
+            review_pause_after=self.review_pause_after(data),
         )
+
+    def review_pause_after(self, data: dict[str, object]) -> tuple[str, ...]:
+        if "review" not in data:
+            return ()
+        review = self.table(data, "review")
+        if "pause_after" not in review:
+            return ()
+        value = review["pause_after"]
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and item for item in value
+        ):
+            raise self.fail("review.pause_after", "ожидается список непустых строк")
+        return tuple(value)
 
     def policy(self, data: dict[str, object], strict: bool) -> PolicySource | None:
         if "policy" not in data:
@@ -446,6 +490,7 @@ _GETTERS: dict[str, Callable[[DfConfig], str]] = {
     "workspace.root": lambda c: str(c.workspace_root),
     "harness.author": lambda c: c.author_harness,
     "harness.model": lambda c: c.author_model,
+    "review.pause_after": lambda c: ",".join(c.review_pause_after),
     "test.approver_version": _approver_version,
 }
 
@@ -463,10 +508,12 @@ def main(argv: list[str], env: Mapping[str, str] = os.environ) -> int:
 
     `mode-or-strict` — режим; файла конфига нет (`lexists` ложно) → `strict`."""
     if argv == ["mode-or-strict"]:
-        if not os.path.lexists(config_path(env)):
-            print("strict")
-            return 0
-        argv = ["get", "mode"]
+        try:
+            print(mode_or_strict(env))
+        except ConfigError as exc:
+            print(f"конфиг DarkFactory: {exc}", file=sys.stderr)
+            return 2
+        return 0
     if len(argv) != 2 or argv[0] != "get":
         print(
             "использование: df_config.py get <ключ> | mode-or-strict", file=sys.stderr

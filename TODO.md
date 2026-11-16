@@ -609,6 +609,15 @@
       вопросов. Поведение: customer-бриф без таблицы, perf/cost-NFR и
       владельцев теперь `gate: fail` (exit 10), а не 11. Стенд L3 после
       перепина несвеж (`@id:l3-stand-freshness`).
+- [x] Ре-вендор `df_config` из devtools @ `eccefbd`: необязательная таблица `[review]` в конфиге DarkFactory (PR #79) @owner:github:andrei-shtanakov @id:revendor-df-config-review @epic:eco.discovery-runtime
+      Inbox `discovery#78` от `devtools#775` (правка файла — `f327386`, #768).
+      sha256 `5f079041…` сверен с issue и с blob апстрима. Без перепина
+      вендоренная копия отвергала конфиг с `[review]` целиком («неизвестный
+      ключ review»), и `approve` падал отказом политики. Заодно приехали
+      баннер test списком (печатается в stderr, префикс `режим test:` прежний),
+      `mode_or_strict()` и `test_banner_line()` — discovery их не вызывает.
+      Регрессия: strict-конфиг с `[review]` проходит `policy.resolve`
+      (красный на старой копии).
 
 ## Ожидания ответов соседей
 
