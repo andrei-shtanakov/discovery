@@ -234,6 +234,21 @@ class TestFromDarkFactoryConfig:
 
         assert policy.resolve(forge) == (frozenset({"bob"}), None)
 
+    def test_an_unknown_review_stage_is_refused(self, monkeypatch):
+        # devtools#778: a typo in pause_after is a load error there, so it is
+        # one here too — one config, one reading across both loaders.
+        monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
+        path = _config_file(monkeypatch)
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text + '\n[review]\npause_after = ["desing"]\n', encoding="utf-8"
+        )
+        forge = _Forge("abc", f"{policy.ALLOWLIST_KEY}=bob\n")
+
+        with pytest.raises(policy.PolicyRefused, match="неизвестный этап desing"):
+            policy.resolve(forge)
+        assert forge.asked is False
+
     def test_strict_policy_diverging_from_vendored_source_refused(self, monkeypatch):
         monkeypatch.delenv(policy.ALLOWLIST_KEY, raising=False)
         path = _config_file(monkeypatch)

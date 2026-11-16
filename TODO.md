@@ -630,6 +630,12 @@
       `mode_or_strict()` и `test_banner_line()` — discovery их не вызывает.
       Регрессия: strict-конфиг с `[review]` проходит `policy.resolve`
       (красный на старой копии).
+- [x] Ре-вендор `df_config` из devtools @ `34cbab8`: `[review] pause_after` принимает только известные этапы (PR #84) @owner:github:andrei-shtanakov @id:revendor-df-config-review-stages @epic:eco.discovery-runtime
+      Inbox `discovery#83` от `devtools#786` (правка файла `e3d0cf5`, #778).
+      sha256 `7c967aab…` сверен с issue и с blob апстрима. Имя вне
+      `REVIEW_STAGES` — `ConfigError`, у нас отказ политики в `approve`;
+      раньше наша копия опечатку пропускала, а devtools — нет. Регрессия:
+      `pause_after = ["desing"]` отказывается (красный на старой копии).
 
 ## Ожидания ответов соседей
 
