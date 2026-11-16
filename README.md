@@ -228,9 +228,11 @@ name would make `traces_to` resolve to the brief itself, and the gate would
 check the document against its own body.
 
 The source is validated before the session exists — it must be a `.md`
-`discovery-brief`, `interview.frame: customer`, `status: approved`, and clean
-under the vendored linter — so an interview cannot be half-run against the wrong
-source. Two names are consequently reserved: `--traces-to upstream.md` alongside
+`discovery-brief`, `interview.frame: customer`, `status: approved` with a
+complete signature written by `discovery approve` (an `approved_content_hash`
+that matches its bytes; a hand-written `approved` without one is refused), and
+clean under the vendored linter — so an interview cannot be half-run against
+the wrong source. Two names are consequently reserved: `--traces-to upstream.md` alongside
 `--upstream` is refused as ambiguous, and `brief --out` may not be named
 `upstream.md` for such a session.
 

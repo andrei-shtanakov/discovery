@@ -509,7 +509,7 @@
       `approved_content_hash` (подписанные рукой на E1), чтобы не блокировать
       E2 до bootstrap репо `approval-policy`; закрыть — переодобрить
       customer-брифы через `approve` и сделать проверку хеша в `admit` тотальной.
-- [ ] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` @owner:github:andrei-shtanakov @id:admit-hash-total @epic:eco.discovery-runtime
+- [x] Сделать проверку `approved_content_hash` в `admit` тотальной и переодобрить E1-брифы через `discovery approve` (PR #80) @owner:github:andrei-shtanakov @id:admit-hash-total @epic:eco.discovery-runtime
       Миграционный долг из `@id:brief-approval-act`: пока репо политики нет,
       `approve` отвечает `unknown`, и требовать хеш от всех апстримов значило бы
       заблокировать engineer-маршрут E2 без пути выхода.
@@ -539,6 +539,14 @@
       **Блокер снят 2026-11-15:** миграция доставлена и проверена
       (`@id:upstream-v13-migration`); единственный upstream-бриф dispatcher
       несёт хеш, пункт actionable.
+      **Сделано 2026-11-16 (PR #80).** `admit` отказывает на любой ответ
+      `approval.verify`, кроме `None`: без хеша (`migration`) и с пустыми
+      полями подписи при совпавшем хеше (`unsigned`). Отказ называет
+      `discovery approve`. Переодобрение: customer-бриф dispatcher подписан
+      через `approve` (dispatcher#321); engineer-бриф через `admit` не идёт,
+      хеш ему здесь не нужен. Фикстуры с ручным `approved` подписаны через
+      `approval.stamp`; мутационные случаи отказа подписываются заново, чтобы
+      каждый падал на своей проверке, а не на устаревшем хеше.
 
 - [x] Upstream-брифы на контракте v1.3: смигрированный и переодобренный customer-бриф dispatcher проходит живой `start --upstream` (dispatcher#320/#321, проверено 2026-11-15) @owner:github:andrei-shtanakov @id:upstream-v13-migration @epic:eco.discovery-runtime
       Приоритет выше `@id:translations-render-minors`. После PR #75 одобренные
