@@ -358,6 +358,17 @@ class TestUpstreamRefusals:
                 ),
                 "coverage read as a mapping",
             ),
+            (
+                lambda t: t.replace(
+                    "  sessions:\n    - participant_role: customer\n",
+                    "  sessions: 3\n",
+                ),
+                "interview.sessions read as a list",
+            ),
+            (
+                lambda t: t.replace("traces_to: []", "traces_to: 5"),
+                "traces_to read as a list of paths",
+            ),
         ],
     )
     def test_a_malformed_upstream_is_refused_with_an_envelope_not_a_traceback(
@@ -368,7 +379,9 @@ class TestUpstreamRefusals:
         `AttributeError` inside the vendored copy, which no handler catches:
         the command would print no envelope at all, breaking the one promise
         every command makes. `drive` parses stdout as JSON, so a traceback
-        fails this case rather than passing it quietly."""
+        fails this case rather than passing it quietly. Since
+        discovery-toolkit#18 the linter is called bare here, so these cases
+        are what holds it to that."""
         mutated = mutate(HAND_APPROVED_UPSTREAM)
         assert mutated != HAND_APPROVED_UPSTREAM, trap
         mutated = signed(mutated)

@@ -458,6 +458,25 @@ class TestEnvelope:
         assert code == 10
         assert _meta(brief)["status"] == "approved"
 
+    def test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback(
+        self, capsys, forge, brief
+    ):
+        """The one raise left in the pinned linter (discovery-toolkit#34):
+        an engineer brief whose `traces_to` resolves to a file not in UTF-8.
+        `_approve` parses stdout as JSON, so a traceback fails this case."""
+        (brief.parent / "bin.md").write_bytes(b"\xff\xfe\x00bad")
+        engineer = DRAFT.replace("frame: customer", "frame: engineer").replace(
+            "traces_to: []", "traces_to: [bin.md]"
+        )
+        brief.write_text(engineer, encoding="utf-8")
+        forge.merged_text = engineer
+
+        code, envelope = _approve(capsys)
+
+        assert envelope["gate"] == "fail"
+        assert code == 10
+        assert any("UnicodeDecodeError" in f for f in envelope["findings"])
+
     def test_policy_is_read_from_the_vendored_coordinates(self, capsys, forge, brief):
         _approve(capsys)
 

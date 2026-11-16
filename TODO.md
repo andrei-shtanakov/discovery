@@ -672,7 +672,7 @@
       (`depends_on`, `priority`, `backend`, ветку) в живом прогоне не принять,
       там либо откат правки, либо новый прогон.
 
-- [ ] Снять обход `_lint` в `upstream.py`, когда `gate_check` станет тотальным на чужом вводе @owner:github:andrei-shtanakov @trigger:"discovery-toolkit#18 закрыт И пин контракта в src/discovery/contract/PINNED.txt обновлён на коммит с фиксом" @id:watch-discovery-toolkit-18 @epic:eco.discovery-runtime
+- [x] Снять обход `_lint` в `upstream.py`, когда `gate_check` станет тотальным на чужом вводе (PR #82) @owner:github:andrei-shtanakov @trigger:"discovery-toolkit#18 закрыт И пин контракта в src/discovery/contract/PINNED.txt обновлён на коммит с фиксом" @id:watch-discovery-toolkit-18 @epic:eco.discovery-runtime
       Заведено `discovery-toolkit#18` (2026-09-18) из работы по `discovery#49`:
       `check()` читает `interview`/`coverage` как мэппинги без проверки типа, и
       скаляр там роняет процесс `AttributeError` — на брифе, который рантайм не
@@ -688,6 +688,21 @@
       Пункт не блокирующий: маршрут работает, обход стоит десяти строк. Но без
       записи он бы протух молча — `PF-BLOCKER-STALE` ловит доставленное ожидание,
       а не «сосед починил, обход больше не нужен».
+      **Сделано 2026-11-16 (PR #82).** Триггер выполнен: #18 закрыт
+      2026-09-22, пин `c09b124` свежее. Сверено фаззом, а не по закрытию
+      issue. 329 подстановок типов во фронтматтер (каждое поле → None, число,
+      строка, список, мэппинг) и правки тела дали 0 исключений.
+      Ограда в `upstream.py` снята: `admit` линтует только customer-фрейм.
+      Тот же фазз по разрешению `traces_to` нашёл одно оставшееся падение:
+      engineer-бриф, чей `traces_to` ведёт на файл не в UTF-8, роняет GC-05
+      `UnicodeDecodeError`. Поэтому ограда `cli._lint_brief` на пути `approve`,
+      который линтует оба фрейма, остаётся (`@id:approve-lint-fence`).
+- [ ] Снять ограду `cli._lint_brief` на пути `approve` после фикса GC-05 у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/gc05-upstream-read-total @id:approve-lint-fence @epic:eco.discovery-runtime
+      Заведено `discovery-toolkit#34` (slug `gc05-upstream-read-total`): GC-05
+      читает upstream engineer-брифа голым `read_text(encoding="utf-8")`.
+      Ограду держит тест `test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback`
+      (без ограды он красный). Снять: перепин на коммит с фиксом, тест
+      переписать на находку линтера вместо `UnicodeDecodeError` в findings.
 
 ## Инфраструктура репо
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from discovery import approval
-from discovery.contract.gate_check import Finding, check, split_frontmatter
+from discovery.contract.gate_check import check, split_frontmatter
 
 UPSTREAM_NAME = "upstream.md"
 
@@ -84,30 +84,14 @@ def admit(path: Path) -> str:
             f"{path}: status is 'approved' but the signature is incomplete "
             f"({debt}): approve the merged brief with `discovery approve`"
         )
-    errors = [f for f in _lint(text, path) if f.level == "error"]
+    # Called bare: since discovery-toolkit#18 the pinned linter answers a
+    # malformed customer brief with findings, not an exception. Its one
+    # known raise left (discovery-toolkit#34) reads an engineer brief's
+    # upstream, and the frame was checked to be `customer` above.
+    errors = [f for f in check(text, base_dir=path.parent) if f.level == "error"]
     if errors:
         raise UpstreamRejected(
             f"{path}: upstream does not pass the vendored linter: "
             + "; ".join(str(f) for f in errors)
         )
     return text
-
-
-def _lint(text: str, path: Path) -> list[Finding]:
-    """`check` fenced against a document that came from outside this runtime.
-
-    The vendored linter was written for briefs this runtime rendered itself,
-    where `interview`, `coverage` and the rest are always the shape it
-    expects; `admit` is the first place it meets a document a caller wrote.
-    A scalar where it reads a mapping raises `AttributeError` *inside* the
-    pinned copy — a traceback instead of the one JSON envelope every command
-    owes its caller. The copy is pinned and cannot be repaired from here, so
-    an unlintable document is refused as one.
-    """
-    try:
-        return check(text, base_dir=path.parent)
-    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
-        raise UpstreamRejected(
-            f"{path}: upstream could not be linted "
-            f"({type(exc).__name__}: {exc}) — malformed for the contract"
-        ) from exc
