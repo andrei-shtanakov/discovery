@@ -17,7 +17,7 @@ from typing import Any, Protocol
 import yaml
 
 from discovery.contract.gate_check import FRAMES, TRANSLATION_HEADING
-from discovery.payload import TRANSLATION_COLUMNS, PayloadInvalid
+from discovery.payload import TRANSLATION_COLUMNS, TRANSLATION_FRAME, PayloadInvalid
 
 # Section headings follow the contract's §2 table, not this module's taste:
 # `J` is "Jobs-to-be-done" and `X` is "Stakeholder Conflicts" there, and a brief
@@ -448,6 +448,9 @@ def render_brief(
 
     frontmatter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
     title = f"# Discovery Brief — {header.target} ({frame}-фрейм)"
-    body = _render_body(entries, _rows_of(parsed))
+    # Intake refuses rows outside the table's frame, but a journal written
+    # before v1.3 may hold them, and GC-18 would not check them there.
+    rows = _rows_of(parsed) if frame == TRANSLATION_FRAME else []
+    body = _render_body(entries, rows)
     text = f"---\n{frontmatter}---\n\n{title}\n\n{body}"
     return text

@@ -380,6 +380,17 @@ class TestTranslationTable:
 
         assert "Translation table" not in render_brief(CUSTOMER, events, "pending")
 
+    def test_a_pre_v13_engineer_journal_renders_no_table(self):
+        """Intake now refuses rows outside the customer frame, but a journal
+        written before v1.3 may hold them; GC-18 never reads an engineer
+        brief, so a table there would reach the brief unchecked."""
+        events = [answer("engineer.constraints.01", "eng", self._ROWS)]
+
+        text = render_brief(Header(frame="engineer"), events, "pending")
+
+        assert "Translation table" not in text
+        assert "мгновенно" not in text
+
 
 class TestSetValuedFields:
     """`owns` and `Category` are sets the linter reads comma-separated; the

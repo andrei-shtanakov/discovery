@@ -573,13 +573,17 @@
       Отрицательные: байт, дописанный после одобрения, — exit 1, «hash does not
       match the bytes»; прежняя v1.2 из `a69a25d` — exit 1, GC-18/20/21; сессий
       ни один отказ не создал.
-- [ ] Хвосты рендера translation table из approve PR #75 @owner:github:andrei-shtanakov @id:translations-render-minors @epic:eco.discovery-runtime
+- [x] Хвосты рендера translation table из approve PR #75 (PR #81) @owner:github:andrei-shtanakov @id:translations-render-minors @epic:eco.discovery-runtime
       Оба minor, оба про край, ниже `@id:upstream-v13-migration`.
       (1) Рендер не смотрит на фрейм: `translations:` в engineer-журнале,
       записанном до PR #75 (приём тогда ключ игнорировал), попадёт в бриф без
       проверки GC-18. Новые ответы отвергаются на приёме. (2) Строка `- {}`
       принимается на приёме, но молча исчезает при рендере — отвергать на
       приёме.
+      **Сделано 2026-11-16 (PR #81).** (1) Таблица рендерится только во фрейме
+      `payload.TRANSLATION_FRAME` (customer). Это одна константа и для приёма, и
+      для рендера, а старые строки engineer-журнала в бриф не попадают.
+      (2) Пустая строка отвергается на приёме.
 
 - [x] Публичная команда `discovery show`: read-only вид сессии вместо импорта внутреннего API зондом devtools (PR #72) @owner:github:andrei-shtanakov @id:discovery-session-view @epic:eco.discovery-runtime
       Inbox `discovery#70` от devtools: `lite/interview_probe.py` исполнялся
