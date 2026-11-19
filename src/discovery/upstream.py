@@ -84,10 +84,16 @@ def admit(path: Path) -> str:
             f"{path}: status is 'approved' but the signature is incomplete "
             f"({debt}): approve the merged brief with `discovery approve`"
         )
-    # Called bare: the pinned linter answers a malformed brief with findings,
-    # not an exception (discovery-toolkit#18 frontmatter, #34 unreadable
-    # upstream file, #38 a `traces_to` string no path can take).
-    errors = [f for f in check(text, base_dir=path.parent) if f.level == "error"]
+    # Fenced like `cli._lint_brief`: on CPython 3.12 a `traces_to` through a
+    # symlink loop still raises in the pinned linter (discovery-toolkit#40).
+    # Drop both fences together (`@id:approve-lint-fence`).
+    try:
+        findings = check(text, base_dir=path.parent)
+    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
+        raise UpstreamRejected(
+            f"{path}: upstream could not be linted ({type(exc).__name__}: {exc})"
+        ) from exc
+    errors = [f for f in findings if f.level == "error"]
     if errors:
         raise UpstreamRejected(
             f"{path}: upstream does not pass the vendored linter: "

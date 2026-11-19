@@ -498,6 +498,24 @@ class TestEnvelope:
         assert any(f.startswith("GC-16") for f in envelope["findings"])
         assert not any("could not be linted" in f for f in envelope["findings"])
 
+    def test_a_ref_through_a_symlink_loop_is_a_failed_gate_not_a_traceback(
+        self, capsys, forge, brief
+    ):
+        """CPython 3.12 `Path.resolve()` raises `RuntimeError` on a symlink
+        loop (discovery-toolkit#40); 3.13 reports GC-16. Either way an
+        envelope, never a traceback — CI runs 3.12, where the fence holds it."""
+        here = brief.parent.resolve()  # `brief` is cwd-relative
+        os.symlink(here / "b", here / "loop")
+        os.symlink(here / "loop", here / "b")
+        hostile = DRAFT.replace("traces_to: []", 'traces_to: ["loop/x.md"]')
+        brief.write_text(hostile, encoding="utf-8")
+        forge.merged_text = hostile
+
+        code, envelope = _approve(capsys)
+
+        assert envelope["gate"] == "fail"
+        assert code == 10
+
     def test_policy_is_read_from_the_vendored_coordinates(self, capsys, forge, brief):
         _approve(capsys)
 
