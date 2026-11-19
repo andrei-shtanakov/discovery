@@ -735,12 +735,24 @@
       engineer-бриф, чей `traces_to` ведёт на файл не в UTF-8, роняет GC-05
       `UnicodeDecodeError`. Поэтому ограда `cli._lint_brief` на пути `approve`,
       который линтует оба фрейма, остаётся (`@id:approve-lint-fence`).
-- [ ] Снять ограду `cli._lint_brief` на пути `approve` после фикса GC-05 у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/gc05-upstream-read-total @id:approve-lint-fence @epic:eco.discovery-runtime
+- [ ] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-total @id:approve-lint-fence @epic:eco.discovery-runtime
       Заведено `discovery-toolkit#34` (slug `gc05-upstream-read-total`): GC-05
       читает upstream engineer-брифа голым `read_text(encoding="utf-8")`.
       Ограду держит тест `test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback`
       (без ограды он красный). Снять: перепин на коммит с фиксом, тест
       переписать на находку линтера вместо `UnicodeDecodeError` в findings.
+      **2026-11-19 (PR #89): #34 доставлен, но ограду не сняли.** Сосед
+      закрыл #34 PR-ом discovery-toolkit#37 (`dbb0eff`): нечитаемый upstream-файл
+      теперь даёт находку GC-12. Перепин сделан, тест переписан на GC-12. Перебор
+      по 56 враждебным **файлам** — 0 исключений. Ревью PR #89 нашло другой
+      класс: **строка** ref с NUL или одиночным суррогатом роняет GC-16
+      (`_resolve_ref` → `Path.resolve()`, `ValueError`/`UnicodeEncodeError`) в
+      любом фрейме. Поэтому ограда в `approve` осталась, такая же вернулась в
+      `upstream.admit`, снятую в PR #82, — теперь как `UpstreamRejected`.
+      `start --traces-to` с суррогатом из argv отказывается до создания сессии:
+      раньше он падал при записи `header.json`. Блокер перевешен на
+      `discovery-toolkit#38` (slug `resolve-ref-total`). После его фикса —
+      перепин и снятие обеих оград; тесты-кейсы NUL и суррогата уже есть.
 
 ## Инфраструктура репо
 

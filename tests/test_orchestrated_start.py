@@ -369,6 +369,16 @@ class TestUpstreamRefusals:
                 lambda t: t.replace("traces_to: []", "traces_to: 5"),
                 "traces_to read as a list of paths",
             ),
+            # A ref string `Path.resolve()` cannot take: GC-16 raises on it
+            # (discovery-toolkit#38), so `admit` keeps its fence.
+            (
+                lambda t: t.replace("traces_to: []", 'traces_to: ["x\\0.md"]'),
+                "a NUL inside a traces_to ref",
+            ),
+            (
+                lambda t: t.replace("traces_to: []", 'traces_to: ["\\ud800.md"]'),
+                "a lone surrogate inside a traces_to ref",
+            ),
         ],
     )
     def test_a_malformed_upstream_is_refused_with_an_envelope_not_a_traceback(
@@ -402,6 +412,29 @@ class TestUpstreamRefusals:
 
         assert code == 1
         assert envelope["operation"]["status"] == "unknown"
+        assert session_ids(tmp_path) == []
+
+    def test_a_traces_to_the_filesystem_cannot_name_is_refused_before_the_session(
+        self, capsys, tmp_path
+    ):
+        """argv decodes an invalid byte to a lone surrogate. Accepted, it sat
+        in `header.json`, and the linter raised on it in every later
+        `status` — a session that could only ever print tracebacks."""
+        code, envelope = drive(
+            [
+                "start",
+                "--frame",
+                "customer",
+                "--target",
+                "org/repo",
+                "--traces-to",
+                "\udcff.md",
+            ],
+            capsys,
+        )
+
+        assert code == 1
+        assert "traces-to" in envelope["operation"]["reason"]
         assert session_ids(tmp_path) == []
 
     def test_traces_to_claiming_the_reserved_name_alongside_upstream_is_refused(

@@ -294,7 +294,7 @@ gate_passed = ( все required-ключи фрейма = covered, и их се�
 | GC-09 | error | каждый `Q-NN`: `owner_role` + `blocking`; каждый `X-NN`: `status ∈ {open, resolved}` |
 | GC-10 | error | счётчики frontmatter = фактам тела (`open_questions`, `blocking_open_questions`, `conflicts`) |
 | GC-11 | error | `gate_passed` в frontmatter = вычисленному по формуле §4 |
-| GC-12 | error/warning | engineer: `traces_to` непуст (error); найденный upstream-brief — `status: approved` (error); upstream не найден ⇒ warning (нерезолвящиеся пути ловит GC-16) |
+| GC-12 | error/warning | engineer: `traces_to` непуст (error); найденный upstream-brief читается (UTF-8) и парсится, `status: approved` (error); upstream не найден ⇒ warning (нерезолвящиеся пути ловит GC-16) |
 | GC-13 | error | engineer: каждое `IF` → существующий `S`; каждое `AP` → `S`/`CON` |
 | GC-14 | warning | customer: записи `S/IF/AP` в customer-брифе — solution-space протёк в problem-space |
 | GC-15 | error | `validation` зеркалит линтер: `pass` допустим только при 0 ошибок; 0 ошибок при `pending`/пустом — протухшее зеркало |

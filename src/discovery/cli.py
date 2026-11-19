@@ -202,6 +202,22 @@ def _admit_upstream(args: argparse.Namespace) -> dict[str, str]:
     return {UPSTREAM_NAME: admit(Path(args.upstream))}
 
 
+def _refuse_unnameable_refs(refs: list[str]) -> None:
+    """Refuse a `--traces-to` no file can be named by, before any session.
+
+    argv decodes an invalid byte to a lone surrogate. Accepted, it could not
+    be written to `header.json`, and the linter would raise on it in every
+    later `status` (discovery-toolkit#38).
+    """
+    for ref in refs:
+        try:
+            ref.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise CallRefused(f"--traces-to {ref!r} is not a usable path") from exc
+        if "\0" in ref:
+            raise CallRefused(f"--traces-to {ref!r} is not a usable path")
+
+
 def cmd_start(args: argparse.Namespace) -> int:
     """Create a session, then emit its shared status envelope.
 
@@ -214,6 +230,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             f"--profile {FEATURE} applies to the customer frame only, "
             f"got {args.frame!r}"
         )
+    _refuse_unnameable_refs(args.traces_to)
     source = build_source()
     files = _admit_upstream(args)
     # `is None`, not falsiness: an explicitly empty `--session-id` is a
@@ -478,11 +495,12 @@ def build_forge() -> Forge:
 def _lint_brief(text: str, path: Path) -> tuple[str, list[str]]:
     """`(gate, findings)` of a brief file the runtime did not just render.
 
-    Fenced: `approve` lints briefs of either frame, and the pinned linter
-    still raises on one engineer input — a `traces_to` that resolves to a
-    file not in UTF-8 (GC-05 reads it bare; discovery-toolkit#34). A brief
-    it cannot read is a failed gate, not a traceback. Drop the fence once
-    the pin carries that fix (TODO.md `@id:approve-lint-fence`).
+    Fenced: `approve` lints a foreign brief, and the pinned linter still
+    raises on a `traces_to` string `Path.resolve()` cannot take — a NUL or
+    a lone surrogate (GC-16, discovery-toolkit#38). An unreadable upstream
+    *file* is a GC-12 finding since #34. A brief it cannot lint is a failed
+    gate, not a traceback. Drop the fence once the pin carries #38
+    (TODO.md `@id:approve-lint-fence`).
     """
     try:
         findings = check(text, base_dir=path.parent)

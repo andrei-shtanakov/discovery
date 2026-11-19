@@ -84,11 +84,17 @@ def admit(path: Path) -> str:
             f"{path}: status is 'approved' but the signature is incomplete "
             f"({debt}): approve the merged brief with `discovery approve`"
         )
-    # Called bare: since discovery-toolkit#18 the pinned linter answers a
-    # malformed customer brief with findings, not an exception. Its one
-    # known raise left (discovery-toolkit#34) reads an engineer brief's
-    # upstream, and the frame was checked to be `customer` above.
-    errors = [f for f in check(text, base_dir=path.parent) if f.level == "error"]
+    # Fenced: the pinned linter answers a malformed frontmatter (toolkit#18)
+    # and an unreadable upstream file (#34) with findings, but still raises
+    # on a `traces_to` string `Path.resolve()` cannot take (#38). Drop the
+    # fence with the one in `cli._lint_brief` (`@id:approve-lint-fence`).
+    try:
+        findings = check(text, base_dir=path.parent)
+    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
+        raise UpstreamRejected(
+            f"{path}: upstream could not be linted ({type(exc).__name__}: {exc})"
+        ) from exc
+    errors = [f for f in findings if f.level == "error"]
     if errors:
         raise UpstreamRejected(
             f"{path}: upstream does not pass the vendored linter: "

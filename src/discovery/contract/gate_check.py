@@ -246,6 +246,19 @@ def _resolve_ref(ref: str, base_dir: Path) -> Path | None:
     return None
 
 
+def _read_upstream(path: Path) -> tuple[dict | None, str]:
+    """Frontmatter и тело upstream-брифа; нечитаемый файл — (None, "") (issue #34).
+
+    Файл чужой: не UTF-8 или исчезнувший между проверкой и чтением — это находка
+    GC-12 «не читается или не парсится», а не исключение из `check()`.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return None, ""
+    return split_frontmatter(text)
+
+
 def translation_rows(body: str) -> list[list[str]] | None:
     """Строки секции `## Translation table` (ячейки, заголовок первым) или None."""
     lines = body.splitlines()
@@ -468,7 +481,7 @@ def check(text: str, base_dir: Path | None = None) -> list[Finding]:
             path = _resolve_ref(ref, base_dir)
             if path is not None:
                 upstream_ref = ref
-                upstream_meta, upstream_body = split_frontmatter(path.read_text(encoding="utf-8"))
+                upstream_meta, upstream_body = _read_upstream(path)
                 if coverage.get("feasibility_review") == "covered" and upstream_meta is not None:
                     for entry in parse_body(upstream_body):
                         if entry.prefix == "FR" and entry.priority() == "Must" and entry.eid not in text:
@@ -553,7 +566,7 @@ def check(text: str, base_dir: Path | None = None) -> list[Finding]:
             err("GC-12", "traces_to", "пуст: engineer-brief обязан ссылаться на customer-brief")
         elif upstream_ref is not None:
             if upstream_meta is None:
-                err("GC-12", upstream_ref, "upstream-brief не парсится")
+                err("GC-12", upstream_ref, "upstream-brief не читается как UTF-8 или не парсится")
             elif upstream_meta.get("status") != "approved":
                 err("GC-12", upstream_ref,
                     f"upstream status={upstream_meta.get('status')!r}, требуется 'approved'")
