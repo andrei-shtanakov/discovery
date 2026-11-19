@@ -5,7 +5,8 @@
 > `tasks.md`/design: компиляция вниз делегируется governance-слою.
 > Методология и канон контракта — в соседнем `discovery-toolkit` (skill
 > `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.3 (v1 frozen 2026-07-14,
-> v1.2 — 2026-11-14, v1.3 — 2026-11-15), линтер `gate_check.py` GC-01…GC-21).
+> v1.2 — 2026-11-14, v1.3 — 2026-11-15, v1.4 — 2026-11-19), линтер `gate_check.py`
+> GC-01…GC-22).
 > Решение: `../_cowork_output/decisions/2026-07-13-adr-discovery-interview-agent.md`;
 > план и тест-пирамида: `../_cowork_output/plans/2026-07-13-discovery-agent-flow-and-test-strategy.md`;
 > обзор экосистемы: `../COWORK_CONTEXT.md`.
@@ -637,7 +638,7 @@
       раньше наша копия опечатку пропускала, а devtools — нет. Регрессия:
       `pause_after = ["desing"]` отказывается (красный на старой копии).
 
-- [ ] Короткий набор банка customer для фичи в существующем репо: `start --profile feature`, вопрос-фильтр на блоки 4–8 с раскрытием по структурному `expand` @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/customer-frame-feature-profile @id:customer-frame-short-set @epic:eco.discovery-runtime
+- [x] Короткий набор банка customer для фичи в существующем репо: `start --profile feature`, вопрос-фильтр на блоки 4–8 с раскрытием по структурному `expand` (PR #88) @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/customer-frame-feature-profile @id:customer-frame-short-set @epic:eco.discovery-runtime
       Inbox `discovery#86` от devtools (`dfl`, `devtools#816`). Живой прогон
       19.11 (CSV-экспорт для Anki): 59 вопросов, по существу 16. Блоки 4–8
       дают 33 из 59. Принят 2026-11-19, slug прежний.
@@ -658,6 +659,15 @@
       полностью; профиль рендерится во фронтматтер; аудит банка
       пересобирается. Стенд L3 после перепина несвеж
       (`@id:l3-stand-freshness`).
+      **Сделано 2026-11-19 (PR #88).** Сосед ответил контрактом v1.4
+      (`discovery-toolkit#36`, `321de3e`): `interview.profile`, строка
+      профиля под маркером темы, `**N/A**` у NFR/CON (GC-22). GC-19 и GC-21
+      не ослаблены: «нет» на фильтр — слова заказчика, вопросы о владельцах
+      входят в `short`. Перепин и рантайм — как в плане выше. Фильтры —
+      `customer.<key>.filterNN`, пометка `is_filter` в `question_asked`,
+      `next_action` и `show`. `profile` во фронтматтере только при `feature`,
+      поэтому подписанные брифы `full` сохраняют байты. Живой прогон при всех
+      «нет»: 18 вопросов (13 + 5 фильтров) против 59.
 
 ## Ожидания ответов соседей
 
