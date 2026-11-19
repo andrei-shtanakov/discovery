@@ -1,6 +1,6 @@
-# Discovery Brief — контракт выходного артефакта интервьюера (v1.3)
+# Discovery Brief — контракт выходного артефакта интервьюера (v1.4)
 
-> Дата заморозки: 2026-07-14 (v1) · Правки v1.1: 2026-07-14 · Правки v1.2: 2026-11-14 · Правки v1.3: 2026-11-15 · Статус: **Frozen (v1.3)** · Канон: этот файл
+> Дата заморозки: 2026-07-14 (v1) · Правки v1.1: 2026-07-14 · Правки v1.2: 2026-11-14 · Правки v1.3: 2026-11-15 · Правки v1.4: 2026-11-19 · Статус: **Frozen (v1.4)** · Канон: этот файл
 > (репо `discovery-toolkit`; черновик v0.1 остаётся в
 > `_cowork_output/contracts/2026-07-13-discovery-brief-contract-v0.1.md` как история).
 > Владелец: discovery-agent (авторит) · Потребитель: governance-слой (Gate BR/FRD/0b/0a)
@@ -70,6 +70,33 @@ compliance. В основу фрейма customer лёг опросник вла
   frontmatter не менялась — `schema_version` остаётся 1; customer-брифы v1.2 без
   translation table и `owns:` линтер v1.3 не пропустит.
 
+## Изменения v1.4 (профиль feature; issue #35 ← discovery#86 ← devtools#816)
+
+Наблюдение — живой прогон 19.11: фича «экспорт словаря в CSV для Anki» в существующем
+небольшом репо, фрейм customer v1.3 задал 59 вопросов, по существу ответов 16. Блоки
+4–8 (стоить, доказывать, данные, приёмка, эксплуатация) маленькой фиче в основном не
+применимы, а GC-19/20/21 требуются независимо от размера темы.
+
+- **`interview.profile: full | feature`** (необязательное; нет поля — `full`; `feature`
+  — только у customer, GC-03). Профиль задаёт набор вопросов банка, не схему брифа.
+- **Короткий набор и вопросы-фильтры** — машинная разметка банка
+  (`<!-- profile: feature; short: …; filter: … -->` под маркером темы, SKILL.md,
+  приложение). Состав набора и тексты фильтров — канон этого репо, рантайм их не
+  сочиняет.
+- **«Не применимо» — запись, не пустота.** Ответ «нет» на фильтр — слова заказчика:
+  строка translation table и запись брифа. У `NFR`/`CON` в профиле feature допустима
+  строка `**N/A**: «слова заказчика» — почему`; у `NFR` она заменяет `Acceptance`/`Target` (GC-08) и
+  число perf/cost (GC-20). NFR категорий `perf`/`cost` по-прежнему обязательны.
+- **GC-19 и GC-21 не ослаблены:** ответы на фильтры блоков 4 и 5 дают строки «стоить»
+  и «доказывать»; вопросы о владельцах данных, качества и эксплуатации входят в
+  короткий набор и задаются и при ответе «нет».
+- **Coverage в профиле feature (§4):** чек-лист нераскрытой темы (без фильтра или с
+  ответом «нет») сужается до её заданных вопросов; недостающее для проверки
+  требования — открытый `Q-NN` (`blocking: false`), а не дозадавание банка.
+- **GC-22:** `**N/A**` — только в профиле feature, только у `NFR`/`CON`, причина
+  цитирует слова заказчика в «…». Схема frontmatter расширена аддитивно — `schema_version` остаётся 1;
+  брифы v1.3 без `profile` читаются как `full` без изменений.
+
 ## TL;DR
 
 1. **Не изобретаем парсер.** Frontmatter = ядро SpecMeta v1 как есть; discovery-специфика
@@ -80,7 +107,7 @@ compliance. В основу фрейма customer лёг опросник вла
    Selection (0a). Расщепление по владельцам — при входе в governance.
 3. **Тело — FRD-стиль spec-runner + ID-трассируемость** (`G/P/J/FR/NFR/CON/M/OUT/S/IF/AP/RK/Q/X`).
 4. **Coverage-gate — машиночитаемый блок**, проверяется линтером `gate_check.py`
-   (правила GC-01…GC-21, §5), не человеком на глаз.
+   (правила GC-01…GC-22, §5), не человеком на глаз.
 5. **Конфликты и открытые вопросы — first-class**: `X-NN` и `Q-NN` обязательны; агент их
    поднимает, не усредняет.
 
@@ -108,6 +135,7 @@ schema_version: 1
 feeds: [charter, requirements]   # customer → [charter, requirements]; engineer → [system-assessment, tech-selection]
 interview:
   frame: customer                # customer | engineer
+  profile: full                  # full | feature (v1.4; нет поля = full; feature — только customer)
   sessions:                      # provenance: РОЛИ, не имена (по умолчанию)
     - participant_role: product-owner
       date: 2026-07-14
@@ -174,11 +202,18 @@ traces_to: []                    # upstream: KB prograph-vault, approved custome
   эвристикой (число и следом слово или символ `₽ $ € £ % °`): «3 поставщиков» она
   пропустит, смысл единицы остаётся на ревью. В customer-брифе обязательна хотя бы одна
   `NFR` категории `perf` (латентность, объём) и одна категории `cost` (бюджет).
+- `**N/A**: «слова заказчика» — почему` (v1.4, только профиль `feature`, только
+  `NFR`/`CON`): блок отфильтрован ответом «нет» на вопрос-фильтр банка. Причина
+  цитирует ответ заказчика в «…» (линтер проверяет непустую цитату; что она — ответ
+  на фильтр, остаётся на ревью). У `NFR` строка заменяет `Acceptance`/`Target` и
+  число perf/cost; запись при этом остаётся (категория обязательна, строка в
+  translation table — тоже). Вне профиля `feature` — ошибка GC-22.
 - Владельцы (v1.3, customer): `` `owns: process|data|quality|operations` `` (через
   запятую) у записи `P` — названный владелец; у открытого `Q` — владелец ещё не назван,
   вопрос открыт. Каждый из четырёх доменов закрыт хотя бы одной записью (GC-21).
 - **Translation table** (v1.3, customer): секция `## Translation table` — markdown-таблица
-  из шести колонок в этом порядке:
+  из шести колонок в этом порядке (заголовок — ровно эти названия, регистр не важен;
+  линтер читает колонки по позиции):
 
   ```
   | Слова заказчика | Категория | Ограничение | Допущение | Подтверждает | Срок |
@@ -208,6 +243,7 @@ traces_to: []                    # upstream: KB prograph-vault, approved custome
 | Precondition | — | customer-brief со `status: approved` в `traces_to` |
 | Анти-паттерн (запрет) | не спрашивать про архитектуру | не пересобирать цели — читать customer-brief |
 | Итог discovery (v1.3) | `## Translation table` + владельцы `owns:` (GC-18…GC-21) | — |
+| Профили интервью (v1.4) | `full` (по умолчанию) · `feature` — фича в существующем репо: короткий набор + вопросы-фильтры блоков 4–8, `**N/A**` (GC-22) | только `full` |
 
 ---
 
@@ -229,6 +265,9 @@ gate_passed = ( все required-ключи фрейма = covered, и их се�
 
 - `covered` = секция есть, непуста и закрывает чек-лист темы; `partial` = есть, но чек-лист
   не закрыт; `missing` = нет.
+- Профиль `feature` (v1.4): чек-лист нераскрытой темы — её заданные вопросы
+  (`short:` и ответ на фильтр); недостающее — открытый `Q-NN` с `blocking: false`.
+  Тема, раскрытая ответом «да», закрывается по полному чек-листу.
 - Optional-ключи (`risks` у customer) со значением `partial`/`missing` гейт **не** валят.
 - `Q` c `blocking: false` гейт не валят — это легитимный перенос в governance.
 - `X` со `status: open` гейт сами по себе не валят, но feasibility-конфликт engineer-фрейма
@@ -246,12 +285,12 @@ gate_passed = ( все required-ключи фрейма = covered, и их се�
 |---|---|---|
 | GC-01 | error | frontmatter парсится; `schema: discovery-brief`; `schema_version: 1` |
 | GC-02 | error | SpecMeta-ядро: `spec_stage: discovery`, `status`, `generated_by`, `generated_at` непусты |
-| GC-03 | error | `interview.frame ∈ {customer, engineer}`; `sessions` непуст; у каждой сессии `participant_role` |
+| GC-03 | error | `interview.frame ∈ {customer, engineer}`; `sessions` непуст; у каждой сессии `participant_role`; `interview.profile` (если есть) `∈ {full, feature}`, `feature` — только у customer |
 | GC-04 | error | `coverage` содержит все required-ключи фрейма; значения ∈ {covered, partial, missing} |
 | GC-05 | error | ключ `covered` ⇒ секция непуста (≥1 ID); пустая секция при `covered` — ложь в данных |
 | GC-06 | error | каждое `FR-NN` имеет `traces` → ≥1 **существующего** `G/J` |
 | GC-07 | error | каждая `M-NN` → ≥1 существующего `G` |
-| GC-08 | error | каждое `FR` несёт `Priority` + `Acceptance`; каждое `NFR` — `Acceptance`/`Target` |
+| GC-08 | error | каждое `FR` несёт `Priority` + `Acceptance`; каждое `NFR` — `Acceptance`/`Target` (в профиле `feature` — либо `**N/A**` с причиной) |
 | GC-09 | error | каждый `Q-NN`: `owner_role` + `blocking`; каждый `X-NN`: `status ∈ {open, resolved}` |
 | GC-10 | error | счётчики frontmatter = фактам тела (`open_questions`, `blocking_open_questions`, `conflicts`) |
 | GC-11 | error | `gate_passed` в frontmatter = вычисленному по формуле §4 |
@@ -261,10 +300,11 @@ gate_passed = ( все required-ключи фрейма = covered, и их се�
 | GC-15 | error | `validation` зеркалит линтер: `pass` допустим только при 0 ошибок; 0 ошибок при `pending`/пустом — протухшее зеркало |
 | GC-16 | error | каждый путь-элемент `traces_to` (`*.md`) разрешается относительно брифа или корня его git-репо |
 | GC-17 | error/warning | каждая ссылка на `Q-NN` в записи `FR`/`NFR`/`M` разрешается в запись `Q` брифа (error); ссылка на `Q` с `resolved: true` — warning: подставьте найденное значение |
-| GC-18 | error | customer: секция `## Translation table` есть и непуста; в каждой строке шесть колонок, слова заказчика непусты, категория из словаря, ограничение ссылается на существующие `FR`/`NFR`/`CON`/`OUT`; у допущения есть подтверждающий и срок `YYYY-MM-DD` |
+| GC-18 | error | customer: секция `## Translation table` есть и непуста; заголовок совпадает с колонками §2 по порядку (без учёта регистра); в каждой строке шесть колонок, слова заказчика непусты, категория из словаря, ограничение ссылается на существующие `FR`/`NFR`/`CON`/`OUT`; у допущения есть подтверждающий и срок `YYYY-MM-DD` |
 | GC-19 | error | customer: в translation table есть ≥1 строка каждой обязательной категории (`делать`, `не делать`, `стоить`, `доказывать`) |
-| GC-20 | error | customer: у каждой `NFR` есть `**Category**`; есть ≥1 `NFR` категории `perf` и ≥1 категории `cost`; их цель — число с единицей до или после него (цифры ID записей не в счёт) или ссылка на `Q-NN` |
+| GC-20 | error | customer: у каждой `NFR` есть `**Category**`; есть ≥1 `NFR` категории `perf` и ≥1 категории `cost`; их цель — число с единицей до или после него (цифры ID записей не в счёт) или ссылка на `Q-NN`; в профиле `feature` — либо `**N/A**` с причиной |
 | GC-21 | error | customer: каждый домен `process`, `data`, `quality`, `operations` закрыт `owns:` у записи `P` или открытого (не `resolved`) `Q` |
+| GC-22 | error | `**N/A**` — только в профиле `feature`, только у `NFR`/`CON`, причина цитирует слова заказчика в непустых «…» |
 
 ---
 
@@ -272,7 +312,7 @@ gate_passed = ( все required-ключи фрейма = covered, и их се�
 
 Эталоны живут в `tests/fixtures/` этого репо (образец подхода — C2
 `spec_meta_contract_v1.md`): `customer_good.md`, `customer_approved.md`,
-`engineer_good.md` — проходят линтер; `bad_*.md` — каждая ломает ровно одно правило
+`customer_feature_good.md` (профиль `feature`), `engineer_good.md` — проходят линтер; `bad_*.md` — каждая ломает ровно одно правило
 GC-NN и поименована по нему. CI гоняет `gate_check.py` против всех.
 
 Round-trip через SpecMeta (unknown-keys не теряются/не ломают `meta_from_dict`) —

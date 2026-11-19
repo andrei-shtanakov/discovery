@@ -50,7 +50,7 @@
         "customer.constraints.06": "de54acedc0a6",
         "customer.constraints.07": "891f111aeb15",
         "customer.constraints.08": "aac36a5149bb",
-        "customer.constraints.09": "871c66d8101f",
+        "customer.constraints.09": "9bad5189caca",
         "customer.constraints.10": "a9a10ea08b81",
         "customer.constraints.11": "8c1a785c6b26",
         "customer.constraints.12": "5094e9872808",
@@ -62,7 +62,7 @@
         "customer.functions.04": "78279294a30a",
         "customer.functions.05": "523e83ba5295",
         "customer.functions.06": "104eef0ca80a",
-        "customer.functions.07": "0f0520722ed9",
+        "customer.functions.07": "99c42095a1d2",
         "customer.functions.08": "587afa0ef581",
         "customer.functions.09": "1d44460cda6d",
         "customer.functions.10": "1063c6a169f9",
@@ -162,5 +162,5 @@
       ]
     }
   },
-  "pin": "upstream: git@github.com:andrei-shtanakov/discovery-toolkit.git\ncommit: c09b1240986f337b56c83908311bb7a558a10d22\n\nDISCOVERY-BRIEF-CONTRACT.md 7d68cd157387f6b73a18ece44819b69048e79ed00000ae726c93847895dbaa79\ngate_check.py 6f0df20eb53b0b775e28bcedc5151550cb37e22f1663cb1b7b606cb204c60047\n.claude/skills/discovery-interview/frames/customer.md 8d82e8090f962328b7b2fd999bd84835cef842e2a72ab45dfe47823dc179e5e8\n.claude/skills/discovery-interview/frames/engineer.md c1942c4d8ebc9177d9727eefcbd85b88de88c9532c62b99d54feb7436b49dcd2"
+  "pin": "upstream: git@github.com:andrei-shtanakov/discovery-toolkit.git\ncommit: 321de3e677b9bc7f197865adc26013f711288846\n\nDISCOVERY-BRIEF-CONTRACT.md 193f8078c53f9f4cebd907b8a59cc511987ede8e8cdaa73007ad436825ad19a3\ngate_check.py 6f7f9da33a8396428b3a302465c32f774a3eeae3276c1533290b82b3afa29b6c\n.claude/skills/discovery-interview/frames/customer.md 4df8f473801f9ef7ec21a9269da8270f14d93807b0ee48e894aecb7b8b365159\n.claude/skills/discovery-interview/frames/engineer.md c1942c4d8ebc9177d9727eefcbd85b88de88c9532c62b99d54feb7436b49dcd2"
 }
