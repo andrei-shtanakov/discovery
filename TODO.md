@@ -756,7 +756,7 @@
       engineer-бриф, чей `traces_to` ведёт на файл не в UTF-8, роняет GC-05
       `UnicodeDecodeError`. Поэтому ограда `cli._lint_brief` на пути `approve`,
       который линтует оба фрейма, остаётся (`@id:approve-lint-fence`).
-- [ ] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-symlink-loop @id:approve-lint-fence @epic:eco.discovery-runtime
+- [x] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа (PR #92) @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-symlink-loop @id:approve-lint-fence @epic:eco.discovery-runtime
       Заведено `discovery-toolkit#34` (slug `gc05-upstream-read-total`): GC-05
       читает upstream engineer-брифа голым `read_text(encoding="utf-8")`.
       Ограду держит тест `test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback`
@@ -787,6 +787,20 @@
       Python, а не только на версии venv; линтер ходит в ФС, его тотальность
       перебором не доказывается — перед следующим снятием решить, не оставить ли
       ограду насовсем как защиту в глубину.
+      **Сделано 2026-11-19 (PR #92).** Сосед закрыл #40 PR-ом
+      discovery-toolkit#41 (`caf7a7f`): цикл симлинков даёт GC-16 и на 3.11/3.12,
+      CI соседа гоняет три версии Python. Перед снятием оград — не по
+      закрытию issue, а сводным перебором, который теперь живёт в наборе:
+      `tests/test_linter_totality.py`. Каждый ключ frontmatter (верхний уровень,
+      `interview`, `coverage`) × 18 враждебных значений, враждебные строки
+      `traces_to`, файлы и формы ФС, тело; оба фрейма × четыре профиля — 4216
+      брифов. На `caf7a7f`: 0 исключений на 3.12 и 3.13. На старом пине
+      `6c32aee` под 3.12 тест красный: 8 из 8 кейсов, 48 падений, все
+      `RuntimeError` от цикла. Значит, поля frontmatter и раньше были
+      тотальны, а цикл был последним путём падения. Ограды сняты в обоих
+      местах; тесты на цикл в `approve`/`admit` требуют находку GC-16. Вопрос
+      «оставить ограду насовсем» снят: тотальность теперь проверяет набор при
+      каждом перепине, а не разовый скрипт.
 
 ## Инфраструктура репо
 

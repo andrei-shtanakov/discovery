@@ -494,17 +494,12 @@ def build_forge() -> Forge:
 def _lint_brief(text: str, path: Path) -> tuple[str, list[str]]:
     """`(gate, findings)` of a brief file the runtime did not just render.
 
-    Fenced: the pinned linter answers malformed frontmatter (toolkit#18),
-    an unreadable upstream file (#34) and an unnameable ref (#38) with
-    findings, but on CPython 3.12 a `traces_to` through a symlink loop still
-    raises `RuntimeError` from `Path.resolve()` (discovery-toolkit#40). A
-    brief it cannot lint is a failed gate, not a traceback. Drop the fence
-    once the pin carries #40 (TODO.md `@id:approve-lint-fence`).
+    Called bare: the pinned linter answers a foreign brief with findings,
+    never an exception — malformed frontmatter (discovery-toolkit#18), an
+    unreadable upstream file (GC-12, #34), a `traces_to` string no path can
+    take (GC-16, #38) or one through a symlink loop (GC-16, #40).
     """
-    try:
-        findings = check(text, base_dir=path.parent)
-    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
-        return "fail", [f"brief could not be linted ({type(exc).__name__}: {exc})"]
+    findings = check(text, base_dir=path.parent)
     errors = [str(f) for f in findings if f.level == "error"]
     return ("fail" if errors else "pass"), [str(f) for f in findings]
 
