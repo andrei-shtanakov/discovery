@@ -7,8 +7,14 @@ changing.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
+
+# Interview profiles, contract v1.4 (`interview.profile`); no field = `full`.
+FULL = "full"
+FEATURE = "feature"
+PROFILES = (FULL, FEATURE)
 
 
 @dataclass(frozen=True)
@@ -18,6 +24,8 @@ class Question:
     question_id: str
     coverage_key: str
     text: str
+    # A `feature` profile yes/no filter: its answer carries `expand`.
+    is_filter: bool = False
 
 
 class QuestionSource(Protocol):
@@ -30,6 +38,13 @@ class QuestionSource(Protocol):
 
     def questions(self, frame: str) -> list[Question]:
         """Ordered questions for the frame; required topics first."""
+        ...
+
+    def feature_questions(
+        self, frame: str, expansions: Mapping[str, bool]
+    ) -> list[Question]:
+        """The `feature` profile's ordered questions, given the filter
+        answers so far (`filter question_id -> expand`)."""
         ...
 
 
@@ -49,3 +64,9 @@ class StaticQuestionSource:
     def questions(self, frame: str) -> list[Question]:
         """Return the frame's questions in catalogue order, or `[]` if unknown."""
         return list(self._catalogue.get(frame, []))
+
+    def feature_questions(
+        self, frame: str, expansions: Mapping[str, bool]
+    ) -> list[Question]:
+        """A fixed catalogue has no profile markup: the same list as `full`."""
+        return self.questions(frame)

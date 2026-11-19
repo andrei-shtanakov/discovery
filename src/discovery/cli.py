@@ -41,16 +41,18 @@ from discovery.lifecycle import (
     compute_lifecycle,
     issued,
     next_question,
+    planned,
 )
 from discovery.payload import (
     AnswerPayload,
     PayloadInvalid,
     parse_payload,
     refuse_foreign_translations,
+    refuse_misplaced_expand,
 )
 from discovery.policy import PolicyRefused
 from discovery.protocol import Envelope
-from discovery.questions import QuestionSource
+from discovery.questions import FEATURE, FULL, PROFILES, Question, QuestionSource
 from discovery.session import (
     InvalidSessionId,
     Session,
@@ -115,7 +117,7 @@ def _issue_if_needed(
 ) -> dict:
     """Persist `question_asked` before returning the pending question, if any."""
     events = journal.events()
-    question = next_question(events, source, header.frame)
+    question = next_question(events, source, header.frame, header.profile)
     if question is None:
         return {}
     if question.question_id not in {e.get("question_id") for e in events}:
@@ -126,13 +128,27 @@ def _issue_if_needed(
                 "coverage_key": question.coverage_key,
                 "question_text": question.text,
                 "source_pin": source.pin,
+                **_filter_mark(question.is_filter),
             }
         )
+    return _action(header, question)
+
+
+def _filter_mark(is_filter: bool) -> dict:
+    """`{"is_filter": True}` on a filter question, nothing otherwise — so
+    events and actions of the `full` profile keep their exact shape."""
+    return {"is_filter": True} if is_filter else {}
+
+
+def _action(header: SessionHeader, question: Question) -> dict:
+    """The `next_action` naming `question`; a filter says so, since its
+    answer must carry `expand`."""
     return {
         "session_id": header.session_id,
         "question_id": question.question_id,
         "coverage_key": question.coverage_key,
         "question_text": question.text,
+        **_filter_mark(question.is_filter),
     }
 
 
@@ -148,7 +164,7 @@ def _status_envelope(
     """
     next_action = _issue_if_needed(journal, header, source)
     events = journal.events()
-    lifecycle = compute_lifecycle(events, source, header.frame)
+    lifecycle = compute_lifecycle(events, source, header.frame, header.profile)
     result = render_and_gate(header, events, _session_dir(session_id))
     return protocol.ok(
         lifecycle=lifecycle,
@@ -193,6 +209,11 @@ def cmd_start(args: argparse.Namespace) -> int:
     first resolvable ref as the upstream brief, so the copy has to precede
     whatever `--traces-to` passed.
     """
+    if args.profile == FEATURE and args.frame != "customer":
+        raise CallRefused(
+            f"--profile {FEATURE} applies to the customer frame only, "
+            f"got {args.frame!r}"
+        )
     source = build_source()
     files = _admit_upstream(args)
     # `is None`, not falsiness: an explicitly empty `--session-id` is a
@@ -208,6 +229,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         traces_to=[*files, *args.traces_to],
         source_pin=source.pin,
         created_at=_now(),
+        profile=args.profile,
     )
     try:
         session = Session.create(sessions_root(), header, files=files)
@@ -236,12 +258,15 @@ def _pending_action(events: list[dict], header: SessionHeader) -> dict:
     answered = answered_ids(events)
     for event in issued(events):
         if event["question_id"] not in answered:
-            return {
-                "session_id": header.session_id,
-                "question_id": event["question_id"],
-                "coverage_key": event["coverage_key"],
-                "question_text": event["question_text"],
-            }
+            return _action(
+                header,
+                Question(
+                    event["question_id"],
+                    event["coverage_key"],
+                    event["question_text"],
+                    is_filter=bool(event.get("is_filter")),
+                ),
+            )
     return {}
 
 
@@ -256,7 +281,9 @@ def cmd_show(args: argparse.Namespace) -> int:
     events = _journal(args.session).events()
     result = render_and_gate(session.header, events, _session_dir(args.session))
     envelope = protocol.ok(
-        lifecycle=compute_lifecycle(events, source, session.header.frame),
+        lifecycle=compute_lifecycle(
+            events, source, session.header.frame, session.header.profile
+        ),
         gate=result.status,
         readiness=result.readiness,
         next_action=_pending_action(events, session.header),
@@ -319,6 +346,17 @@ def _replacements(events: list[dict], target: str, payload: AnswerPayload) -> di
     return {"replaces_entries": replaced} if replaced else {}
 
 
+def _filter_ids(
+    events: list[dict], source: QuestionSource, header: SessionHeader
+) -> set[str]:
+    """Every filter question of this session: the ones issued, plus the
+    ones its profile plans (a filter is planned whatever its topic's state,
+    so an answer ahead of the sequence is judged the same way)."""
+    asked = {e["question_id"] for e in issued(events) if e.get("is_filter")}
+    plan = planned(events, source, header.frame, header.profile)
+    return asked | {q.question_id for q in plan if q.is_filter}
+
+
 def cmd_answer(args: argparse.Namespace) -> int:
     """Resolve the target question, then no-op / refuse / record / supersede."""
     source = build_source()
@@ -329,7 +367,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
 
     target = args.question
     if target is None:
-        pending = next_question(events, source, header.frame)
+        pending = next_question(events, source, header.frame, header.profile)
         target = pending.question_id if pending is not None else None
     if target is None:
         return _emit(
@@ -343,6 +381,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
     )
     payload = parse_payload(raw)
     refuse_foreign_translations(payload, header.frame)
+    refuse_misplaced_expand(payload, target in _filter_ids(events, source, header))
 
     new_id = answer_id(header.session_id, target, args.role, raw)
     existing = _latest_answer(events, target)
@@ -352,6 +391,7 @@ def cmd_answer(args: argparse.Namespace) -> int:
         "participant_role": args.role,
         "answer_id": new_id,
         "payload": raw,
+        **({} if payload.expand is None else {"expand": payload.expand}),
         **_replacements(events, target, payload),
     }
 
@@ -403,7 +443,9 @@ def cmd_brief(args: argparse.Namespace) -> int:
     events = journal.events()
     result = render_and_gate(session.header, events, _session_dir(args.session))
     write_artifact(Path(args.out), result.text)
-    lifecycle = compute_lifecycle(events, source, session.header.frame)
+    lifecycle = compute_lifecycle(
+        events, source, session.header.frame, session.header.profile
+    )
     next_action = (
         {}
         if lifecycle != AWAITING_INPUT
@@ -604,6 +646,7 @@ def _build_parser() -> argparse.ArgumentParser:
     start.add_argument("--traces-to", action="append", default=[])
     start.add_argument("--upstream")
     start.add_argument("--session-id")
+    start.add_argument("--profile", choices=list(PROFILES), default=FULL)
     start.set_defaults(func=cmd_start)
 
     status = subparsers.add_parser("status")

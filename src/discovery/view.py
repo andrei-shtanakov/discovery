@@ -30,6 +30,7 @@ def session_view(header: SessionHeader, events: list[dict]) -> dict[str, Any]:
         "traces_to": list(header.traces_to),
         "source_pin": header.source_pin,
         "created_at": header.created_at,
+        "profile": header.profile,
         "topics": {
             "required": dict(FRAMES[frame]["required"]),
             "optional": dict(FRAMES[frame]["optional"]),
@@ -46,6 +47,7 @@ def session_view(header: SessionHeader, events: list[dict]) -> dict[str, Any]:
                 "question_id": e["question_id"],
                 "coverage_key": e.get("coverage_key"),
                 "question_text": e.get("question_text"),
+                **({"is_filter": True} if e.get("is_filter") else {}),
             }
             for e in issued(events)
         ],

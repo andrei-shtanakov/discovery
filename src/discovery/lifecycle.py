@@ -10,7 +10,7 @@ precondition (an empty source is `unknown`, not `complete`).
 
 from __future__ import annotations
 
-from discovery.questions import Question, QuestionSource
+from discovery.questions import FEATURE, FULL, Question, QuestionSource
 
 AWAITING_INPUT = "awaiting_input"
 COMPLETE = "complete"
@@ -35,8 +35,34 @@ def answered_ids(events: list[dict]) -> set[str]:
     }
 
 
+def expansions(events: list[dict]) -> dict[str, bool]:
+    """`filter question_id -> expand` from each question's latest answer.
+
+    Latest, not first: `--supersede` of a filter answer re-decides whether
+    its topic is expanded.
+    """
+    result: dict[str, bool] = {}
+    for event in events:
+        if event.get("event") != "answer_recorded":
+            continue
+        if "expand" in event:
+            result[event["question_id"]] = event["expand"] is True
+        else:
+            result.pop(event["question_id"], None)
+    return result
+
+
+def planned(
+    events: list[dict], source: QuestionSource, frame: str, profile: str = FULL
+) -> list[Question]:
+    """The bank's questions for `profile`, given the journal's filter answers."""
+    if profile == FEATURE:
+        return source.feature_questions(frame, expansions(events))
+    return source.questions(frame)
+
+
 def next_question(
-    events: list[dict], source: QuestionSource, frame: str
+    events: list[dict], source: QuestionSource, frame: str, profile: str = FULL
 ) -> Question | None:
     """Pending (issued, unanswered) questions are rebuilt from their own
     question_asked event — source.questions() is not consulted for them.
@@ -46,19 +72,24 @@ def next_question(
     for event in issued(events):
         if event["question_id"] not in answered:
             return Question(
-                event["question_id"], event["coverage_key"], event["question_text"]
+                event["question_id"],
+                event["coverage_key"],
+                event["question_text"],
+                is_filter=bool(event.get("is_filter")),
             )
 
     already_issued = {event["question_id"] for event in issued(events)}
     settled = already_issued | answered
-    for question in source.questions(frame):
+    for question in planned(events, source, frame, profile):
         if question.question_id not in settled:
             return question
 
     return None
 
 
-def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) -> str:
+def compute_lifecycle(
+    events: list[dict], source: QuestionSource, frame: str, profile: str = FULL
+) -> str:
     """`awaiting_input` iff a next question exists.
 
     A pending (issued, unanswered) question outranks an empty source: it is
@@ -66,7 +97,7 @@ def compute_lifecycle(events: list[dict], source: QuestionSource, frame: str) ->
     nothing is pending does an empty source catalogue yield `unknown` rather
     than `complete`.
     """
-    if next_question(events, source, frame) is not None:
+    if next_question(events, source, frame, profile) is not None:
         return AWAITING_INPUT
     if not source.questions(frame):
         return UNKNOWN

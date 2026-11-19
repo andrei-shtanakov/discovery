@@ -28,6 +28,7 @@ at `cli.build_forge`, never imported by a core module.
 ```
 discovery start  --frame {customer,engineer} --target <repo> [--traces-to <path>]...
                  [--upstream <customer_brief>] [--session-id <id>]
+                 [--profile {full,feature}]
 discovery status --session <id>
 discovery show   --session <id>
 discovery answer --session <id> [--question <id>] --role <role> --file <path> [--supersede]
@@ -161,6 +162,36 @@ translations:
     confirmer: product-owner
     due: 2026-12-01
 ```
+
+### Feature profile (customer, contract v1.4)
+
+`start --frame customer --profile feature` runs the bank's short set for a
+feature in an existing repo instead of the whole enterprise questionnaire
+(default `full`; `feature` with any other frame is refused). Which questions
+are in the set and how each filter is worded is the vendored bank's markup,
+not the runtime's. A topic without a filter asks only its short questions. A
+topic of blocks 4–8 asks its yes/no **filter** first, and nothing more of
+that topic until the filter is answered. The filter's `next_action` carries
+`"is_filter": true`, and its answer must carry a YAML bool `expand`:
+
+```yaml
+text: «нет, как у остального приложения»
+expand: false
+```
+
+`true` asks the whole topic, `false` only its short questions. The runtime
+never reads the free text for this, so `expand` is required on a filter
+answer and refused on any other. `--supersede` of a filter answer re-decides
+it: a later `true` adds the topic's questions to the queue. Question ids are
+the same as under `full`, and filters are `customer.<key>.filterNN`. The brief
+declares `interview.profile: feature` (a `full` brief omits the field, as v1.4
+reads absence as `full`), and `show` reports `session.profile`.
+
+A "no" is still the customer's words: record it as an entry with `N/A`, which
+renders as `**N/A**: «…» — why` (NFR/CON only, the reason quoting the
+customer, GC-22). An `N/A` NFR of category `perf, cost` closes GC-20 without
+a number. The `N/A` field is legal only under `feature`; in a `full` brief
+the linter reports GC-22.
 
 ## What a caller reads
 
