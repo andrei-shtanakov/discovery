@@ -234,15 +234,20 @@ def _resolve_ref(ref: str, base_dir: Path) -> Path | None:
 
     Абсолютные пути отбрасываются, а результат обязан остаться внутри корня репо
     (или base_dir, если репо нет) — защита от path traversal на непроверенном контенте.
+    Строка, которую ОС не примет как путь (NUL, одиночный суррогат), — тоже
+    нерезолвима: находка GC-16, а не исключение из `check()` (issue #38).
     """
     if Path(ref).is_absolute():
         return None
     root = _repo_root(base_dir)
     bound = root if root is not None else base_dir.resolve()
     for anchor in (base_dir, bound):
-        cand = (anchor / ref).resolve()
-        if cand.is_file() and cand.is_relative_to(bound):
-            return cand
+        try:
+            cand = (anchor / ref).resolve()
+            if cand.is_file() and cand.is_relative_to(bound):
+                return cand
+        except (OSError, ValueError):  # UnicodeEncodeError — подкласс ValueError
+            return None
     return None
 
 

@@ -206,8 +206,7 @@ def _refuse_unnameable_refs(refs: list[str]) -> None:
     """Refuse a `--traces-to` no file can be named by, before any session.
 
     argv decodes an invalid byte to a lone surrogate. Accepted, it could not
-    be written to `header.json`, and the linter would raise on it in every
-    later `status` (discovery-toolkit#38).
+    be written to `header.json`, leaving a session no `status` can read.
     """
     for ref in refs:
         try:
@@ -495,17 +494,12 @@ def build_forge() -> Forge:
 def _lint_brief(text: str, path: Path) -> tuple[str, list[str]]:
     """`(gate, findings)` of a brief file the runtime did not just render.
 
-    Fenced: `approve` lints a foreign brief, and the pinned linter still
-    raises on a `traces_to` string `Path.resolve()` cannot take — a NUL or
-    a lone surrogate (GC-16, discovery-toolkit#38). An unreadable upstream
-    *file* is a GC-12 finding since #34. A brief it cannot lint is a failed
-    gate, not a traceback. Drop the fence once the pin carries #38
-    (TODO.md `@id:approve-lint-fence`).
+    Called bare: the pinned linter answers a foreign brief with findings,
+    never an exception — malformed frontmatter (discovery-toolkit#18), an
+    unreadable upstream file (GC-12, #34), a `traces_to` string no path
+    can take (GC-16, #38).
     """
-    try:
-        findings = check(text, base_dir=path.parent)
-    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
-        return "fail", [f"brief could not be linted ({type(exc).__name__}: {exc})"]
+    findings = check(text, base_dir=path.parent)
     errors = [str(f) for f in findings if f.level == "error"]
     return ("fail" if errors else "pass"), [str(f) for f in findings]
 

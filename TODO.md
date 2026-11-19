@@ -735,7 +735,7 @@
       engineer-бриф, чей `traces_to` ведёт на файл не в UTF-8, роняет GC-05
       `UnicodeDecodeError`. Поэтому ограда `cli._lint_brief` на пути `approve`,
       который линтует оба фрейма, остаётся (`@id:approve-lint-fence`).
-- [ ] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-total @id:approve-lint-fence @epic:eco.discovery-runtime
+- [x] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа (PR #90) @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-total @id:approve-lint-fence @epic:eco.discovery-runtime
       Заведено `discovery-toolkit#34` (slug `gc05-upstream-read-total`): GC-05
       читает upstream engineer-брифа голым `read_text(encoding="utf-8")`.
       Ограду держит тест `test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback`
@@ -753,6 +753,14 @@
       раньше он падал при записи `header.json`. Блокер перевешен на
       `discovery-toolkit#38` (slug `resolve-ref-total`). После его фикса —
       перепин и снятие обеих оград; тесты-кейсы NUL и суррогата уже есть.
+      **Сделано 2026-11-19 (PR #90).** Сосед закрыл #38 PR-ом
+      discovery-toolkit#39 (`6c32aee`): `_resolve_ref` ловит `OSError`/`ValueError`,
+      такая ссылка — находка GC-16. Перепин сделан, обе ограды сняты, тесты NUL и
+      суррогата требуют находку GC-16 (`approve`) и отказ (`admit`). Проверено
+      перебором по обоим классам: 136 враждебных строк и значений `traces_to` и
+      56 враждебных файлов — 0 исключений. Без оград на старом пине 4 из этих
+      тестов красные. Проверка `start --traces-to` на входе остаётся: суррогат
+      ломает запись `header.json` независимо от линтера.
 
 ## Инфраструктура репо
 

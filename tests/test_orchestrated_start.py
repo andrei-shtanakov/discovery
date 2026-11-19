@@ -369,8 +369,8 @@ class TestUpstreamRefusals:
                 lambda t: t.replace("traces_to: []", "traces_to: 5"),
                 "traces_to read as a list of paths",
             ),
-            # A ref string `Path.resolve()` cannot take: GC-16 raises on it
-            # (discovery-toolkit#38), so `admit` keeps its fence.
+            # A ref string `Path.resolve()` cannot take: GC-16 raised on it
+            # until discovery-toolkit#38, now it is an unresolvable ref.
             (
                 lambda t: t.replace("traces_to: []", 'traces_to: ["x\\0.md"]'),
                 "a NUL inside a traces_to ref",
@@ -417,9 +417,10 @@ class TestUpstreamRefusals:
     def test_a_traces_to_the_filesystem_cannot_name_is_refused_before_the_session(
         self, capsys, tmp_path
     ):
-        """argv decodes an invalid byte to a lone surrogate. Accepted, it sat
-        in `header.json`, and the linter raised on it in every later
-        `status` — a session that could only ever print tracebacks."""
+        """argv decodes an invalid byte to a lone surrogate. Accepted, the
+        `header.json` write raised on it: a traceback instead of an envelope,
+        and a reserved id no `status` could read. Refused at intake instead,
+        whatever the linter makes of such a ref."""
         code, envelope = drive(
             [
                 "start",
