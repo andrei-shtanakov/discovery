@@ -182,7 +182,9 @@ expand: false
 `true` asks the whole topic, `false` only its short questions. The runtime
 never reads the free text for this, so `expand` is required on a filter
 answer and refused on any other. `--supersede` of a filter answer re-decides
-it: a later `true` adds the topic's questions to the queue. Question ids are
+it: a later `true` adds the topic's questions to the queue, while a question
+already issued stays pending until answered (a pending question is always
+rebuilt from its own `question_asked`, never re-planned). Question ids are
 the same as under `full`, and filters are `customer.<key>.filterNN`. The brief
 declares `interview.profile: feature` (a `full` brief omits the field, as v1.4
 reads absence as `full`), and `show` reports `session.profile`.

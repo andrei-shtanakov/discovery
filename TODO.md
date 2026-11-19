@@ -4,7 +4,7 @@
 > ведёт интервью со стейкхолдером и авторит `discovery-brief`, но **не пишет**
 > `tasks.md`/design: компиляция вниз делегируется governance-слою.
 > Методология и канон контракта — в соседнем `discovery-toolkit` (skill
-> `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.3 (v1 frozen 2026-07-14,
+> `discovery-interview`, `DISCOVERY-BRIEF-CONTRACT.md` v1.4 (v1 frozen 2026-07-14,
 > v1.2 — 2026-11-14, v1.3 — 2026-11-15, v1.4 — 2026-11-19), линтер `gate_check.py`
 > GC-01…GC-22).
 > Решение: `../_cowork_output/decisions/2026-07-13-adr-discovery-interview-agent.md`;
