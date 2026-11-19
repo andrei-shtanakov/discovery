@@ -401,6 +401,27 @@
       хешу, внешнее по значению) и печатает список расхождений.
       Несовпадение означает «для текущей конфигурации прогона нет» — дата не
       доказывает ничего. Спека: `docs/superpowers/specs/2026-08-21-l3-quality-benchmark-design.md` §9.
+      **2026-11-19: S1 и S3 свежие, S2 — нет.** После перепинов v1.3/v1.4 поднят
+      `max_turns` 40 → 80 (стенд `50e4c0e`): в серии 16.11 все прогоны S1/S3
+      упёрлись в 40 ходов на банке из 59 вопросов. По одному прогону
+      (`--repetitions 1`), оба валидны, по 59 ходов, около 2 ч каждый, порядка
+      $10 каждый по API-расценкам Sonnet 5.5.
+      S1 `20261119T100926Z-00`: `extraction_recall` 0.641 (база 0.398 [0.340,
+      0.485], n=5, банк 19 вопросов), `requirement_invention_rate` 0.140,
+      `unanchored_entry_rate` 0.727. S3 `20261119T100955Z-00`:
+      `contradiction_recall` 0.5, `contradiction_raised_rate` 1.0. Это n=1,
+      и рост recall совпал с ростом банка втрое: базу не переписывать, пока нет
+      серии. Составной триггер фазы 3 («recall ≥ 0.60 на пяти свежих прогонах И
+      пилот с KB») этим не выполнен. S2 остаётся STALE — см.
+      `@id:l3-caller-brief-v13`.
+- [ ] Цепочка S2 стенда L3: caller пишет бриф по контракту v1.3+ (translation table, `Category` у NFR, владельцы `owns:`) @owner:github:andrei-shtanakov @trigger:"решение владельца: менять caller стенда (меняет то, что меряет бенчмарк)" @id:l3-caller-brief-v13 @epic:eco.discovery-runtime
+      S2 строит фикстуру одобрения из брифа S1 (`l3bench/approval.py`) и
+      отказывает, если бриф не проходит вендоренный линтер. Caller
+      (`prompts/caller.md`) не знает translation table, `Category` и `owns:`,
+      поэтому бриф S1 после v1.3 получает GC-18/20/21 и цепочка не строится.
+      По той же причине красные 11 тестов стенда (`test_approval`,
+      `test_chain`): их фикстуры написаны под v1.2. Правка живёт в стенде:
+      промпт caller'а, фикстуры тестов, пересчёт базы S1.
 - [x] `freshness.py`: ревизию рантайма считать по дереву `src/discovery`, а не по HEAD репо @owner:github:andrei-shtanakov @id:l3-freshness-runtime-tree @epic:eco.discovery-runtime
       **Сделано 2026-09-13 (`discovery-test` @ `4ebdc4b`).** `discovery_revision`
       теперь составлен из Git object id для `src/discovery`, `pyproject.toml` и
