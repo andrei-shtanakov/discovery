@@ -30,6 +30,7 @@ class SessionHeader:
     traces_to: list[str]
     source_pin: str
     created_at: str
+    profile: str = "full"
 
 
 THIN_HEADER = SessionHeader(

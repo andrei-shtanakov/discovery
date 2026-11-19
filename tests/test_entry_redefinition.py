@@ -112,6 +112,7 @@ class _Header:
     target = "org/repo"
     traces_to: list[str] = []
     created_at = "2026-09-11T00:00:00Z"
+    profile = "full"
 
 
 def test_render_and_readiness_see_the_same_redefined_entries():

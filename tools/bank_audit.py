@@ -123,13 +123,23 @@ class FrameAudit:
 
 
 def audit_frame(frame: str, frames_dir: Path) -> FrameAudit:
-    """Classify `frame`'s issued questions and report its coverage claims."""
+    """Classify `frame`'s issued questions and report its coverage claims.
+
+    Issued means anything a stakeholder can be asked in any profile: the
+    `full` bank plus the `feature` profile's filters (contract v1.4), which
+    are worded in the bank and reach `next_action` like any question.
+    """
     source = BankQuestionSource(pin="audit", frames_dir=frames_dir)
+    topics = parse_frame((frames_dir / f"{frame}.md").read_text(encoding="utf-8"))
+    filters = (
+        [q for q in source.feature_questions(frame, {}) if q.is_filter]
+        if any(topic.filter is not None for topic in topics)
+        else []
+    )
     questions = tuple(
         QuestionAudit(q.question_id, q.coverage_key, q.text, tuple(classify(q.text)))
-        for q in source.questions(frame)
+        for q in [*source.questions(frame), *filters]
     )
-    topics = parse_frame((frames_dir / f"{frame}.md").read_text(encoding="utf-8"))
     # One key may span several topics (contract v1.3): union their produces in
     # first-seen order instead of letting the last topic overwrite the rest.
     claimed: dict[str, list[str]] = {}

@@ -41,6 +41,8 @@ class SessionHeader:
     traces_to: list[str]
     source_pin: str
     created_at: str
+    # Contract v1.4 `interview.profile`; headers written before it read as full.
+    profile: str = "full"
 
 
 def _validate_session_id(session_id: str) -> None:

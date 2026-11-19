@@ -58,6 +58,8 @@ class AnswerPayload:
     text: str
     entries: list[Entry]
     translations: list[dict[str, Any]] = field(default_factory=list)
+    # Answer to a `feature` profile filter (contract v1.4); `None` — absent.
+    expand: bool | None = None
 
 
 def _parse_entry(item: Any) -> Entry:
@@ -87,8 +89,8 @@ def parse_payload(raw: str) -> AnswerPayload:
 
     Raises `PayloadInvalid` on a YAML syntax error, a non-mapping document,
     a missing `text` key, a non-list `entries` value, an entry without an
-    `id`, an entry `id` not matching `ID_RE`, one id declared twice, or a
-    malformed `translations` list.
+    `id`, an entry `id` not matching `ID_RE`, one id declared twice, a
+    malformed `translations` list, or an `expand` that is not a YAML bool.
     """
     try:
         doc = yaml.safe_load(raw)
@@ -103,7 +105,12 @@ def parse_payload(raw: str) -> AnswerPayload:
     entries = [_parse_entry(item) for item in raw_entries]
     _refuse_duplicate_ids(entries)
     translations = _parse_translations(doc.get("translations"))
-    return AnswerPayload(text=text, entries=entries, translations=translations)
+    expand = doc.get("expand")
+    if "expand" in doc and not isinstance(expand, bool):
+        raise PayloadInvalid(f"expand must be true or false: {expand!r}")
+    return AnswerPayload(
+        text=text, entries=entries, translations=translations, expand=expand
+    )
 
 
 def _parse_translations(raw: Any) -> list[dict[str, Any]]:
@@ -149,6 +156,16 @@ def refuse_foreign_translations(payload: AnswerPayload, frame: str) -> None:
         raise PayloadInvalid(
             f"translations belong to the {TRANSLATION_FRAME} frame only, got {frame!r}"
         )
+
+
+def refuse_misplaced_expand(payload: AnswerPayload, is_filter: bool) -> None:
+    """`expand` is the whole point of a filter answer and meaningless
+    elsewhere (contract v1.4): required on a filter, refused on any other
+    question, so neither a forgotten nor a stray flag is guessed at."""
+    if is_filter and payload.expand is None:
+        raise PayloadInvalid("a filter question's answer needs expand: true|false")
+    if not is_filter and payload.expand is not None:
+        raise PayloadInvalid("expand answers a filter question only")
 
 
 def _refuse_duplicate_ids(entries: list[Entry]) -> None:

@@ -18,6 +18,7 @@ import yaml
 
 from discovery.contract.gate_check import FRAMES, TRANSLATION_HEADING
 from discovery.payload import TRANSLATION_COLUMNS, TRANSLATION_FRAME, PayloadInvalid
+from discovery.questions import FULL
 
 # Section headings follow the contract's §2 table, not this module's taste:
 # `J` is "Jobs-to-be-done" and `X` is "Stakeholder Conflicts" there, and a brief
@@ -51,6 +52,8 @@ _LABELLED_FIELDS = {
     "category": "Category",
     # Contract v1.2: the stakeholder's words, verbatim, beside the hypothesis.
     "preference": "Preference",
+    # Contract v1.4, feature profile: a filtered block's NFR/CON (GC-22).
+    "n/a": "N/A",
 }
 
 
@@ -73,6 +76,7 @@ class SessionHeaderLike(Protocol):
     target: str
     traces_to: list[str]
     created_at: str
+    profile: str
 
 
 GENERATED_BY = "discovery-runtime"
@@ -402,6 +406,17 @@ def _render_body(entries: list[Entry], translations: list[dict[str, Any]]) -> st
     return "\n\n".join(sections)
 
 
+def _interview(header: SessionHeaderLike, events: list[dict]) -> dict[str, Any]:
+    """`interview` frontmatter. `profile` only when not `full`: contract v1.4
+    reads a missing field as `full`, and a `full` brief keeps its bytes —
+    and with them any `approved_content_hash` already signed over it."""
+    interview: dict[str, Any] = {"frame": header.frame}
+    if header.profile != FULL:
+        interview["profile"] = header.profile
+    interview["sessions"] = _sessions(events)
+    return interview
+
+
 def render_brief(
     header: SessionHeaderLike,
     events: list[dict],
@@ -433,7 +448,7 @@ def render_brief(
         "generated_by": GENERATED_BY,
         "generated_at": header.created_at,
         "validation": validation,
-        "interview": {"frame": frame, "sessions": _sessions(events)},
+        "interview": _interview(header, events),
         "coverage": {
             **coverage,
             # `entries` is already parsed here; going through the
