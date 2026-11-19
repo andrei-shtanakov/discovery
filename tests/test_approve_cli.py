@@ -481,6 +481,22 @@ class TestEnvelope:
         )
         assert not any("could not be linted" in f for f in envelope["findings"])
 
+    @pytest.mark.parametrize("ref", ["x\\0.md", "\\ud800.md"])
+    def test_a_ref_the_linter_raises_on_is_a_failed_gate_not_a_traceback(
+        self, capsys, forge, brief, ref
+    ):
+        """A `traces_to` string `Path.resolve()` cannot take still raises in
+        GC-16 (discovery-toolkit#38), whatever the frame: the fence holds it."""
+        hostile = DRAFT.replace("traces_to: []", f'traces_to: ["{ref}"]')
+        brief.write_text(hostile, encoding="utf-8")
+        forge.merged_text = hostile
+
+        code, envelope = _approve(capsys)
+
+        assert envelope["gate"] == "fail"
+        assert code == 10
+        assert any("could not be linted" in f for f in envelope["findings"])
+
     def test_policy_is_read_from_the_vendored_coordinates(self, capsys, forge, brief):
         _approve(capsys)
 
