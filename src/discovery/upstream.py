@@ -84,10 +84,9 @@ def admit(path: Path) -> str:
             f"{path}: status is 'approved' but the signature is incomplete "
             f"({debt}): approve the merged brief with `discovery approve`"
         )
-    # Called bare: since discovery-toolkit#18 the pinned linter answers a
-    # malformed customer brief with findings, not an exception. Its one
-    # known raise left (discovery-toolkit#34) reads an engineer brief's
-    # upstream, and the frame was checked to be `customer` above.
+    # Called bare: the pinned linter answers a malformed brief with findings,
+    # not an exception (discovery-toolkit#18 for the frontmatter, #34 for an
+    # unreadable upstream).
     errors = [f for f in check(text, base_dir=path.parent) if f.level == "error"]
     if errors:
         raise UpstreamRejected(

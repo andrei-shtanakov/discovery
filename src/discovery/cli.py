@@ -478,16 +478,11 @@ def build_forge() -> Forge:
 def _lint_brief(text: str, path: Path) -> tuple[str, list[str]]:
     """`(gate, findings)` of a brief file the runtime did not just render.
 
-    Fenced: `approve` lints briefs of either frame, and the pinned linter
-    still raises on one engineer input — a `traces_to` that resolves to a
-    file not in UTF-8 (GC-05 reads it bare; discovery-toolkit#34). A brief
-    it cannot read is a failed gate, not a traceback. Drop the fence once
-    the pin carries that fix (TODO.md `@id:approve-lint-fence`).
+    Called bare: since discovery-toolkit#34 the pinned linter reports an
+    unreadable upstream as a GC-12 finding instead of raising, so a foreign
+    brief is a failed gate, never a traceback.
     """
-    try:
-        findings = check(text, base_dir=path.parent)
-    except Exception as exc:  # noqa: BLE001 — the pinned linter, on foreign input
-        return "fail", [f"brief could not be linted ({type(exc).__name__}: {exc})"]
+    findings = check(text, base_dir=path.parent)
     errors = [str(f) for f in findings if f.level == "error"]
     return ("fail" if errors else "pass"), [str(f) for f in findings]
 

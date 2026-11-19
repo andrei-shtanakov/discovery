@@ -735,12 +735,20 @@
       engineer-бриф, чей `traces_to` ведёт на файл не в UTF-8, роняет GC-05
       `UnicodeDecodeError`. Поэтому ограда `cli._lint_brief` на пути `approve`,
       который линтует оба фрейма, остаётся (`@id:approve-lint-fence`).
-- [ ] Снять ограду `cli._lint_brief` на пути `approve` после фикса GC-05 у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/gc05-upstream-read-total @id:approve-lint-fence @epic:eco.discovery-runtime
+- [x] Снять ограду `cli._lint_brief` на пути `approve` после фикса GC-05 у соседа (PR #89) @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/gc05-upstream-read-total @id:approve-lint-fence @epic:eco.discovery-runtime
       Заведено `discovery-toolkit#34` (slug `gc05-upstream-read-total`): GC-05
       читает upstream engineer-брифа голым `read_text(encoding="utf-8")`.
       Ограду держит тест `test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback`
       (без ограды он красный). Снять: перепин на коммит с фиксом, тест
       переписать на находку линтера вместо `UnicodeDecodeError` в findings.
+      **Сделано 2026-11-19 (PR #89).** Сосед закрыл #34 PR-ом
+      discovery-toolkit#37 (`dbb0eff`): нечитаемый upstream (не UTF-8 или
+      `OSError` между проверкой и чтением) — находка GC-12, не исключение.
+      Перепин на `dbb0eff`, `_lint_brief` вызывает `check` без ограды, тест
+      переименован и требует находку GC-12 по `bin.md`. Проверено перебором,
+      а не по закрытию issue: 56 враждебных целей `traces_to` (не UTF-8,
+      каталог, битая ссылка, без прав, битый frontmatter; оба фрейма) —
+      0 исключений.
 
 ## Инфраструктура репо
 

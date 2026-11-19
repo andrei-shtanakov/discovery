@@ -167,5 +167,5 @@
       ]
     }
   },
-  "pin": "upstream: git@github.com:andrei-shtanakov/discovery-toolkit.git\ncommit: 321de3e677b9bc7f197865adc26013f711288846\n\nDISCOVERY-BRIEF-CONTRACT.md 193f8078c53f9f4cebd907b8a59cc511987ede8e8cdaa73007ad436825ad19a3\ngate_check.py 6f7f9da33a8396428b3a302465c32f774a3eeae3276c1533290b82b3afa29b6c\n.claude/skills/discovery-interview/frames/customer.md 4df8f473801f9ef7ec21a9269da8270f14d93807b0ee48e894aecb7b8b365159\n.claude/skills/discovery-interview/frames/engineer.md c1942c4d8ebc9177d9727eefcbd85b88de88c9532c62b99d54feb7436b49dcd2"
+  "pin": "upstream: git@github.com:andrei-shtanakov/discovery-toolkit.git\ncommit: dbb0eff42581aa5399b7db16898799e1648703ec\n\nDISCOVERY-BRIEF-CONTRACT.md 695ae0a295b08da5f50918c51cf516845f327fdbbeff0a5547d8804c3f2a17ef\ngate_check.py 9099c222cecec5b4df1dbc97cad24ad67c0df569857e01d0b99fff447ac81e7b\n.claude/skills/discovery-interview/frames/customer.md 4df8f473801f9ef7ec21a9269da8270f14d93807b0ee48e894aecb7b8b365159\n.claude/skills/discovery-interview/frames/engineer.md c1942c4d8ebc9177d9727eefcbd85b88de88c9532c62b99d54feb7436b49dcd2"
 }
