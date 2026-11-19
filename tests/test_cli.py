@@ -704,3 +704,24 @@ class TestGateInvariantFailsClosed:
         assert envelope["gate"] == "unknown"
         assert envelope["readiness"] == "unknown"
         assert "two-pass mismatch" in envelope["operation"]["reason"]
+
+
+class TestDeepYaml:
+    """YAML nested past the recursion limit is a refusal, never a traceback."""
+
+    def test_an_answer_too_deep_to_parse_leaves_the_journal_unchanged(
+        self, capsys, monkeypatch, tmp_path
+    ):
+        session_id, _, _ = _start(capsys, monkeypatch, tmp_path, ONE_QUESTION)
+        before = cli._journal(session_id).events()
+        deep = tmp_path / "deep.yaml"
+        deep.write_text("text: x\nentries: " + "[" * 5000 + "]" * 5000 + "\n")
+
+        code, envelope = _run(
+            capsys,
+            ["answer", "--session", session_id, "--role", "po", "--file", str(deep)],
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert cli._journal(session_id).events() == before

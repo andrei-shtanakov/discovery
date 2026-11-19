@@ -481,6 +481,30 @@ class TestEnvelope:
         )
         assert not any("could not be linted" in f for f in envelope["findings"])
 
+    @pytest.mark.parametrize("where", ["brief", "upstream"])
+    def test_yaml_too_deep_to_parse_is_an_envelope_not_a_traceback(
+        self, capsys, forge, brief, where
+    ):
+        """PyYAML raises `RecursionError` on frontmatter nested about a
+        thousand levels deep — in the brief `approve` reads itself, and in
+        the upstream the linter reads through `traces_to`
+        (discovery-toolkit#42)."""
+        deep = "x: " + "[" * 5000 + "]" * 5000 + "\n"
+        if where == "brief":
+            hostile = DRAFT.replace("traces_to: []", "traces_to: []\n" + deep)
+        else:
+            (brief.parent / "notes.md").write_text(f"---\n{deep}---\n")
+            hostile = DRAFT.replace("frame: customer", "frame: engineer").replace(
+                "traces_to: []", "traces_to: [notes.md]"
+            )
+        brief.write_text(hostile, encoding="utf-8")
+        forge.merged_text = hostile
+
+        code, envelope = _approve(capsys)
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+
     @pytest.mark.parametrize("ref", ["x\\0.md", "\\ud800.md"])
     def test_an_unnameable_ref_is_a_gc16_finding_not_a_traceback(
         self, capsys, forge, brief, ref
@@ -502,8 +526,8 @@ class TestEnvelope:
         self, capsys, forge, brief
     ):
         """CPython 3.12 `Path.resolve()` raises `RuntimeError` on a symlink
-        loop (discovery-toolkit#40); 3.13 reports GC-16. Either way an
-        envelope, never a traceback — CI runs 3.12, where the fence holds it."""
+        loop; the linter reports it as GC-16 since discovery-toolkit#40. The
+        unfenced call must too — CI runs 3.12, where the raise lived."""
         here = brief.parent.resolve()  # `brief` is cwd-relative
         os.symlink(here / "b", here / "loop")
         os.symlink(here / "loop", here / "b")
@@ -515,6 +539,8 @@ class TestEnvelope:
 
         assert envelope["gate"] == "fail"
         assert code == 10
+        assert any(f.startswith("GC-16") for f in envelope["findings"])
+        assert not any("could not be linted" in f for f in envelope["findings"])
 
     def test_policy_is_read_from_the_vendored_coordinates(self, capsys, forge, brief):
         _approve(capsys)

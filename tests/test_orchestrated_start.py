@@ -418,15 +418,41 @@ class TestUpstreamRefusals:
     def test_an_upstream_ref_through_a_symlink_loop_is_refused_not_a_traceback(
         self, capsys, tmp_path
     ):
-        """CPython 3.12 raises `RuntimeError` resolving a symlink loop in the
-        pinned linter (discovery-toolkit#40): `admit` must still refuse with
-        an envelope, and leave no session."""
+        """CPython 3.12 raised `RuntimeError` resolving a symlink loop until
+        discovery-toolkit#40; now GC-16. `admit` refuses with an envelope
+        naming that finding, and leaves no session."""
         mutated = signed(
             HAND_APPROVED_UPSTREAM.replace("traces_to: []", 'traces_to: ["loop/x.md"]')
         )
         upstream = write_upstream(tmp_path, mutated)
         os.symlink(upstream.parent / "b", upstream.parent / "loop")
         os.symlink(upstream.parent / "loop", upstream.parent / "b")
+
+        code, envelope = drive(
+            [
+                "start",
+                "--frame",
+                "engineer",
+                "--target",
+                "org/repo",
+                "--upstream",
+                str(upstream),
+            ],
+            capsys,
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert "GC-16" in envelope["operation"]["reason"]
+        assert session_ids(tmp_path) == []
+
+    def test_an_upstream_too_deep_to_parse_is_refused_not_a_traceback(
+        self, capsys, tmp_path
+    ):
+        """PyYAML raises `RecursionError` on frontmatter nested about a
+        thousand levels deep; `admit` parses the upstream before anything."""
+        deep = "---\nschema: discovery-brief\nx: " + "[" * 5000 + "]" * 5000
+        upstream = write_upstream(tmp_path, deep + "\n---\n")
 
         code, envelope = drive(
             [
