@@ -206,8 +206,7 @@ def _refuse_unnameable_refs(refs: list[str]) -> None:
     """Refuse a `--traces-to` no file can be named by, before any session.
 
     argv decodes an invalid byte to a lone surrogate. Accepted, it could not
-    be written to `header.json`, and the linter would raise on it in every
-    later `status` (discovery-toolkit#38).
+    be written to `header.json`, leaving a session no `status` can read.
     """
     for ref in refs:
         try:
@@ -495,12 +494,12 @@ def build_forge() -> Forge:
 def _lint_brief(text: str, path: Path) -> tuple[str, list[str]]:
     """`(gate, findings)` of a brief file the runtime did not just render.
 
-    Fenced: `approve` lints a foreign brief, and the pinned linter still
-    raises on a `traces_to` string `Path.resolve()` cannot take — a NUL or
-    a lone surrogate (GC-16, discovery-toolkit#38). An unreadable upstream
-    *file* is a GC-12 finding since #34. A brief it cannot lint is a failed
-    gate, not a traceback. Drop the fence once the pin carries #38
-    (TODO.md `@id:approve-lint-fence`).
+    Fenced: the pinned linter answers malformed frontmatter (toolkit#18),
+    an unreadable upstream file (#34) and an unnameable ref (#38) with
+    findings, but on CPython 3.12 a `traces_to` through a symlink loop still
+    raises `RuntimeError` from `Path.resolve()` (discovery-toolkit#40). A
+    brief it cannot lint is a failed gate, not a traceback. Drop the fence
+    once the pin carries #40 (TODO.md `@id:approve-lint-fence`).
     """
     try:
         findings = check(text, base_dir=path.parent)

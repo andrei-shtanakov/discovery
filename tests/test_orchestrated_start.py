@@ -29,6 +29,7 @@ there.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -369,8 +370,8 @@ class TestUpstreamRefusals:
                 lambda t: t.replace("traces_to: []", "traces_to: 5"),
                 "traces_to read as a list of paths",
             ),
-            # A ref string `Path.resolve()` cannot take: GC-16 raises on it
-            # (discovery-toolkit#38), so `admit` keeps its fence.
+            # A ref string `Path.resolve()` cannot take: GC-16 raised on it
+            # until discovery-toolkit#38, now it is an unresolvable ref.
             (
                 lambda t: t.replace("traces_to: []", 'traces_to: ["x\\0.md"]'),
                 "a NUL inside a traces_to ref",
@@ -414,12 +415,43 @@ class TestUpstreamRefusals:
         assert envelope["operation"]["status"] == "unknown"
         assert session_ids(tmp_path) == []
 
+    def test_an_upstream_ref_through_a_symlink_loop_is_refused_not_a_traceback(
+        self, capsys, tmp_path
+    ):
+        """CPython 3.12 raises `RuntimeError` resolving a symlink loop in the
+        pinned linter (discovery-toolkit#40): `admit` must still refuse with
+        an envelope, and leave no session."""
+        mutated = signed(
+            HAND_APPROVED_UPSTREAM.replace("traces_to: []", 'traces_to: ["loop/x.md"]')
+        )
+        upstream = write_upstream(tmp_path, mutated)
+        os.symlink(upstream.parent / "b", upstream.parent / "loop")
+        os.symlink(upstream.parent / "loop", upstream.parent / "b")
+
+        code, envelope = drive(
+            [
+                "start",
+                "--frame",
+                "engineer",
+                "--target",
+                "org/repo",
+                "--upstream",
+                str(upstream),
+            ],
+            capsys,
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert session_ids(tmp_path) == []
+
     def test_a_traces_to_the_filesystem_cannot_name_is_refused_before_the_session(
         self, capsys, tmp_path
     ):
-        """argv decodes an invalid byte to a lone surrogate. Accepted, it sat
-        in `header.json`, and the linter raised on it in every later
-        `status` — a session that could only ever print tracebacks."""
+        """argv decodes an invalid byte to a lone surrogate. Accepted, the
+        `header.json` write raised on it: a traceback instead of an envelope,
+        and a reserved id no `status` could read. Refused at intake instead,
+        whatever the linter makes of such a ref."""
         code, envelope = drive(
             [
                 "start",

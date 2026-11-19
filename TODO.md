@@ -735,7 +735,7 @@
       engineer-бриф, чей `traces_to` ведёт на файл не в UTF-8, роняет GC-05
       `UnicodeDecodeError`. Поэтому ограда `cli._lint_brief` на пути `approve`,
       который линтует оба фрейма, остаётся (`@id:approve-lint-fence`).
-- [ ] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-total @id:approve-lint-fence @epic:eco.discovery-runtime
+- [ ] Снять ограды `cli._lint_brief` (`approve`) и `upstream.admit` вокруг вендоренного линтера после фикса `_resolve_ref` у соседа @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/resolve-ref-symlink-loop @id:approve-lint-fence @epic:eco.discovery-runtime
       Заведено `discovery-toolkit#34` (slug `gc05-upstream-read-total`): GC-05
       читает upstream engineer-брифа голым `read_text(encoding="utf-8")`.
       Ограду держит тест `test_a_brief_the_linter_raises_on_is_a_failed_gate_not_a_traceback`
@@ -753,6 +753,19 @@
       раньше он падал при записи `header.json`. Блокер перевешен на
       `discovery-toolkit#38` (slug `resolve-ref-total`). После его фикса —
       перепин и снятие обеих оград; тесты-кейсы NUL и суррогата уже есть.
+      **2026-11-19 (PR #90): #38 доставлен, ограды опять остались.** Сосед
+      закрыл #38 PR-ом discovery-toolkit#39 (`6c32aee`): NUL и суррогат в строке
+      ref дают GC-16. Перепин сделан. Перебор на 3.13 — 136 строк и значений
+      `traces_to` и 56 файлов — дал 0 исключений, и ограды сняли. Ревью PR #90
+      нашло третий класс, теперь **форму ФС**: цикл симлинков. На CPython 3.12
+      (нижняя граница `requires-python`, на ней же CI) `Path.resolve()` бросает
+      `RuntimeError`, который `_resolve_ref` не ловит; на 3.13 тот же вход даёт
+      GC-16. Ограды возвращены, тесты на цикл в `approve` и `admit` на 3.12 без
+      оград красные. Запрос соседу — `discovery-toolkit#40` (slug
+      `resolve-ref-symlink-loop`). **Урок:** перебор гонять на нижней версии
+      Python, а не только на версии venv; линтер ходит в ФС, его тотальность
+      перебором не доказывается — перед следующим снятием решить, не оставить ли
+      ограду насовсем как защиту в глубину.
 
 ## Инфраструктура репо
 
