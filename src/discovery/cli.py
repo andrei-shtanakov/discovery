@@ -711,6 +711,10 @@ def main(argv: list[str] | None = None) -> int:
         approval.NotABrief,
         OSError,
         UnicodeDecodeError,
+        # Foreign YAML nested ~1000 levels deep: PyYAML's composer recurses
+        # per level, in our own parsing and inside the vendored linter alike
+        # (discovery-toolkit#42). The stack has unwound by the time it lands.
+        RecursionError,
     ) as exc:
         return _emit(protocol.unknown(str(exc)))
 

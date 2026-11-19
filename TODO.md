@@ -801,6 +801,22 @@
       местах; тесты на цикл в `approve`/`admit` требуют находку GC-16. Вопрос
       «оставить ограду насовсем» снят: тотальность теперь проверяет набор при
       каждом перепине, а не разовый скрипт.
+      Ревью PR #92 нашло ещё ось, теперь глубину YAML. Композер PyYAML
+      рекурсивен, и frontmatter с вложенностью около 1000 даёт `RecursionError`.
+      Это не только линтер (цель `traces_to`, discovery-toolkit#42): тот же вход
+      валил и наши пути — ответ в `answer`, upstream в `admit`, frontmatter
+      брифа в `approve`, — с traceback без envelope, ещё до этого PR.
+      Починено здесь: `parse_payload` → `PayloadInvalid`, `RecursionError` в
+      сетке `cli.main`. Тест тотальности теперь проверяет обе половины посылки:
+      нет исключения и есть хотя бы одна находка уровня error. Глубокий YAML в
+      нём стоит строгим `xfail` до `@id:linter-totality-deep-yaml`.
+- [ ] Перепин на фикс `split_frontmatter` у соседа: снять строгий `xfail` глубокого YAML в `tests/test_linter_totality.py` @owner:github:andrei-shtanakov @blocked_by:todo://discovery-toolkit/frontmatter-recursion-total @id:linter-totality-deep-yaml @epic:eco.discovery-runtime
+      discovery-toolkit#42: `split_frontmatter` ловит только `yaml.YAMLError`,
+      а `RecursionError` от вложенности около 1000 уходит из `check()` —
+      в том числе на upstream engineer-брифа по `traces_to`. Пока у нас это
+      `unknown`-envelope через сетку `cli.main`, а не находка GC-12/GC-01.
+      После фикса строгий `xfail` станет красным: снять его, сетку в
+      `cli.main` оставить — она закрывает и наш собственный разбор YAML.
 
 ## Инфраструктура репо
 

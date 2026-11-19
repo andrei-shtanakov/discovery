@@ -446,6 +446,31 @@ class TestUpstreamRefusals:
         assert "GC-16" in envelope["operation"]["reason"]
         assert session_ids(tmp_path) == []
 
+    def test_an_upstream_too_deep_to_parse_is_refused_not_a_traceback(
+        self, capsys, tmp_path
+    ):
+        """PyYAML raises `RecursionError` on frontmatter nested about a
+        thousand levels deep; `admit` parses the upstream before anything."""
+        deep = "---\nschema: discovery-brief\nx: " + "[" * 5000 + "]" * 5000
+        upstream = write_upstream(tmp_path, deep + "\n---\n")
+
+        code, envelope = drive(
+            [
+                "start",
+                "--frame",
+                "engineer",
+                "--target",
+                "org/repo",
+                "--upstream",
+                str(upstream),
+            ],
+            capsys,
+        )
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+        assert session_ids(tmp_path) == []
+
     def test_a_traces_to_the_filesystem_cannot_name_is_refused_before_the_session(
         self, capsys, tmp_path
     ):

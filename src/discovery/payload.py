@@ -90,12 +90,17 @@ def parse_payload(raw: str) -> AnswerPayload:
     Raises `PayloadInvalid` on a YAML syntax error, a non-mapping document,
     a missing `text` key, a non-list `entries` value, an entry without an
     `id`, an entry `id` not matching `ID_RE`, one id declared twice, a
-    malformed `translations` list, or an `expand` that is not a YAML bool.
+    malformed `translations` list, an `expand` that is not a YAML bool, or
+    YAML nested too deeply to parse.
     """
     try:
         doc = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
         raise PayloadInvalid(f"invalid YAML: {exc}") from exc
+    except RecursionError as exc:
+        # PyYAML's composer recurses per nesting level; ~1000 levels raise
+        # this, and it is not a `YAMLError`.
+        raise PayloadInvalid("YAML nested too deeply to parse") from exc
     if not isinstance(doc, dict) or "text" not in doc:
         raise PayloadInvalid(f"payload missing text: {doc!r}")
     text = str(doc["text"]).strip()

@@ -481,6 +481,30 @@ class TestEnvelope:
         )
         assert not any("could not be linted" in f for f in envelope["findings"])
 
+    @pytest.mark.parametrize("where", ["brief", "upstream"])
+    def test_yaml_too_deep_to_parse_is_an_envelope_not_a_traceback(
+        self, capsys, forge, brief, where
+    ):
+        """PyYAML raises `RecursionError` on frontmatter nested about a
+        thousand levels deep — in the brief `approve` reads itself, and in
+        the upstream the linter reads through `traces_to`
+        (discovery-toolkit#42)."""
+        deep = "x: " + "[" * 5000 + "]" * 5000 + "\n"
+        if where == "brief":
+            hostile = DRAFT.replace("traces_to: []", "traces_to: []\n" + deep)
+        else:
+            (brief.parent / "notes.md").write_text(f"---\n{deep}---\n")
+            hostile = DRAFT.replace("frame: customer", "frame: engineer").replace(
+                "traces_to: []", "traces_to: [notes.md]"
+            )
+        brief.write_text(hostile, encoding="utf-8")
+        forge.merged_text = hostile
+
+        code, envelope = _approve(capsys)
+
+        assert code == 1
+        assert envelope["operation"]["status"] == "unknown"
+
     @pytest.mark.parametrize("ref", ["x\\0.md", "\\ud800.md"])
     def test_an_unnameable_ref_is_a_gc16_finding_not_a_traceback(
         self, capsys, forge, brief, ref

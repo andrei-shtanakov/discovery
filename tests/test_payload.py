@@ -202,3 +202,11 @@ class TestTranslations:
 
     def test_engineer_answer_without_rows_is_accepted(self):
         refuse_foreign_translations(parse_payload("text: t\n"), "engineer")
+
+
+def test_yaml_nested_past_the_recursion_limit_is_invalid():
+    """PyYAML's composer recurses per nesting level: about a thousand levels
+    raise `RecursionError`, which is not a `YAMLError`."""
+    deep = "[" * 5000 + "]" * 5000
+    with pytest.raises(PayloadInvalid, match="nested"):
+        parse_payload(f"text: x\nentries: {deep}\n")

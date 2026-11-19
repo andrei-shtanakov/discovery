@@ -149,23 +149,66 @@ def _variants(frame: str, profile: str | None) -> Iterator[str]:
             yield text
 
 
+def _unanswered(text: str, base_dir: Path) -> str | None:
+    """Why `check` failed to answer `text` with an error finding, or `None`.
+
+    Both halves of the premise: no raise, and no empty verdict. Every base
+    brief here is an empty session's, which already fails the gate, so a
+    hostile variant with zero errors is the linter reading a brief it did
+    not understand as clean — the fail-open `approve`/`admit` would pass on.
+    """
+    try:
+        findings = check(text, base_dir=base_dir)
+    except Exception as exc:  # noqa: BLE001 — collecting every raise is the point
+        return f"raised {type(exc).__name__}: {str(exc)[:80]}"
+    if not any(f.level == "error" for f in findings):
+        return "no error finding"
+    return None
+
+
 @pytest.mark.parametrize("profile", [None, "full", "feature", "bogus"])
 @pytest.mark.parametrize("frame", ["customer", "engineer"])
-def test_check_answers_every_hostile_brief_with_findings(
+def test_check_answers_every_hostile_brief_with_an_error(
     hostile_dir: Path, frame: str, profile: str | None
 ) -> None:
-    raised: dict[tuple[str, str], int] = {}
+    unanswered: dict[str, int] = {}
     for text in _variants(frame, profile):
-        try:
-            check(text, base_dir=hostile_dir)
-        except Exception as exc:  # noqa: BLE001 — collecting every raise is the point
-            signature = (type(exc).__name__, str(exc)[:80])
-            raised[signature] = raised.get(signature, 0) + 1
-    assert raised == {}
+        if (why := _unanswered(text, hostile_dir)) is not None:
+            unanswered[why] = unanswered.get(why, 0) + 1
+    assert unanswered == {}
 
 
 @pytest.mark.parametrize("text", ["", "---\n---\n", "---\n[\n---\n", "\x00---\n"])
 def test_check_answers_a_brief_without_usable_frontmatter(
     hostile_dir: Path, text: str
 ) -> None:
-    check(text, base_dir=hostile_dir)
+    assert _unanswered(text, hostile_dir) is None
+
+
+_DEEP = "x: " + "[" * 5000 + "]" * 5000 + "\n"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=RecursionError,
+    reason="discovery-toolkit#42: split_frontmatter lets PyYAML's RecursionError "
+    "out; `cli.main` nets it as an `unknown` envelope until the re-pin",
+)
+@pytest.mark.parametrize("where", ["brief", "upstream"])
+def test_check_answers_yaml_nested_past_the_recursion_limit(
+    hostile_dir: Path, where: str
+) -> None:
+    header = SessionHeader(
+        session_id="s-totality",
+        frame="engineer",
+        target="org/repo",
+        traces_to=["deep.md"],
+        source_pin="pin",
+        created_at="2026-11-19T00:00:00Z",
+    )
+    text = render_brief(header, [], validation="pending")
+    if where == "brief":
+        text = text.replace("---\n", f"---\n{_DEEP}", 1)
+    (hostile_dir / "deep.md").write_text(f"---\n{_DEEP}---\n", encoding="utf-8")
+    findings = check(text, base_dir=hostile_dir)
+    assert any(f.level == "error" for f in findings)
