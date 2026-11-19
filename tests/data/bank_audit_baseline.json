@@ -56,6 +56,8 @@
         "customer.constraints.12": "5094e9872808",
         "customer.constraints.13": "977af18a435b",
         "customer.constraints.14": "8b5c61b14e54",
+        "customer.constraints.filter01": "be6b7b071a35",
+        "customer.constraints.filter02": "30b859c26b6e",
         "customer.functions.01": "5c0f48747cc8",
         "customer.functions.02": "c7b281086f4f",
         "customer.functions.03": "ab1107da98bb",
@@ -69,6 +71,7 @@
         "customer.functions.11": "3d798f912aba",
         "customer.functions.12": "0ca6295ce19f",
         "customer.functions.13": "c3cb15ce73f6",
+        "customer.functions.filter01": "a36591198916",
         "customer.goals.01": "99a48d9de069",
         "customer.goals.02": "f2ab3824d7bb",
         "customer.jobs.01": "d539e099c639",
@@ -86,6 +89,8 @@
         "customer.nfr.11": "a7ecb2c4b64b",
         "customer.nfr.12": "ad231a086426",
         "customer.nfr.13": "b4c1c90b345a",
+        "customer.nfr.filter01": "4a0c2077d239",
+        "customer.nfr.filter02": "0d4b35af7d4d",
         "customer.out_of_scope.01": "5ba1140790d5",
         "customer.out_of_scope.02": "76fc4fc94693",
         "customer.out_of_scope.03": "977edec0a65a",
@@ -102,7 +107,7 @@
         "customer.success_metrics.05": "35b604f6c7e8",
         "customer.success_metrics.06": "3868d331c886"
       },
-      "issued": 59,
+      "issued": 64,
       "leading": 1,
       "questions": {
         "customer.nfr.05": [

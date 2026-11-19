@@ -58,7 +58,7 @@ class TestClassify:
 
 
 class TestAuditFrame:
-    @pytest.mark.parametrize("frame,issued", [("customer", 59), ("engineer", 13)])
+    @pytest.mark.parametrize("frame,issued", [("customer", 64), ("engineer", 13)])
     def test_audits_exactly_the_issued_questions(self, frame, issued):
         audit = bank_audit.audit_frame(frame, FRAMES)
         assert len(audit.questions) == issued
@@ -117,10 +117,15 @@ class TestBaseline:
         current = bank_audit.snapshot(FRAMES)
         assert current["pin"], "a snapshot without its pin cannot be attributed"
 
-    @pytest.mark.parametrize("frame,issued", [("customer", 59), ("engineer", 13)])
+    # customer: 59 bank questions + 5 feature-profile filters (contract v1.4).
+    @pytest.mark.parametrize("frame,issued", [("customer", 64), ("engineer", 13)])
     def test_digests_cover_exactly_the_issued_questions(self, frame, issued):
         current = bank_audit.snapshot(FRAMES)
         assert len(current["frames"][frame]["digests"]) == issued
+
+    def test_a_filter_question_is_digested_like_any_other(self):
+        digests = bank_audit.snapshot(FRAMES)["frames"]["customer"]["digests"]
+        assert "customer.nfr.filter01" in digests
 
     def test_leading_count_excludes_advisory_only_questions(self):
         current = bank_audit.snapshot(FRAMES)
